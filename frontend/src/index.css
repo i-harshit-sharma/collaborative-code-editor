@@ -1,0 +1,53 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* color-scheme: light dark; */
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #0e1525;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.no-scrollbar {
+  scrollbar-width: none !important;
+  /* Firefox */
+  -ms-overflow-style: none !important;
+  /* IE and Edge */
+}
+
+/* Safari and Chrome */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+
+
+@import "tailwindcss";
+
+@theme {
+  --color-dark-1: #3C445C;
+  --color-dark-2: #2b3245;
+  
+  --color-dark-3: #3c445c;
+  --color-dark-4: #1c2333;
+  --color-blue-1: #0079f2;
+}
+.dotted{
+  background-image: radial-gradient(#484848 1px, transparent 0);
+  background-size: 60px 60px;
+  background-position: -19px -19px;
+}
+
+.sora-font  {
+  font-family: "Sora", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+}
+.cl-internal-1dauvpw{
+  display: none !important;
+}
