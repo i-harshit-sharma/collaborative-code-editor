@@ -16,6 +16,7 @@ import {
     ChevronUpIcon,
 } from "@radix-ui/react-icons";
 import classnames from "classnames";
+import { useUser } from '@clerk/clerk-react';
 
 
 function getTimeAgo(date) {
@@ -38,7 +39,7 @@ function getTimeAgo(date) {
     return `${years} year${years === 1 ? '' : 's'} ago`;
 }
 
-const ProjectList = ({ limit }) => {
+const ProjectList = ({ limit, shared = false }) => {
     const [isOpen, setIsOpen] = useState(false)
     const [edit, setEdit] = useState(null)
     const [share, setShare] = useState(null)
@@ -54,22 +55,40 @@ const ProjectList = ({ limit }) => {
     const inputRef = useRef(null)
     const [userConf, setUserConf] = useState("Viewer")
     const deleteRef = useRef(null)
+    const [loading, setLoading] = useState(false)
 
     useEffect(() => {
         const get = async () => {
-            try {
-                const token = await getToken();
-                const response = await axios.get("http://localhost:4000/protected/get-repos", {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                    },
-                    withCredentials: true,
-                });
-                console.log(response.data)
-                setList(response.data)
-            } catch (error) {
-                console.error(error);
+            if (!shared) {
+                try {
+                    const token = await getToken();
+                    const response = await axios.get("http://localhost:4000/protected/get-repos", {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                        },
+                        withCredentials: true,
+                    });
+                    console.log(response.data)
+                    setList(response.data)
+                } catch (error) {
+                    console.error(error);
+                }
+            }else{
+                try {
+                    const token = await getToken();
+                    const response = await axios.get("http://localhost:4000/protected/get-shared-repos", {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                        },
+                        withCredentials: true,
+                    });
+                    console.log(response.data)
+                    setList(response.data)
+                } catch (error) {
+                    console.error(error);
+                }
             }
         }
         get()
@@ -186,7 +205,7 @@ const ProjectList = ({ limit }) => {
         } catch (error) {
             console.error(error);
         }
-        finally{
+        finally {
             setDeleteRepo(null)
         }
 
@@ -195,7 +214,7 @@ const ProjectList = ({ limit }) => {
     // TODO: get shared users, Add shared users
 
     return (
-        <div className='flex gap-6 my-3 flex-wrap'>
+        <div className='flex gap-6 my-3 flex-wrap w-full'>
             {list.length === 0 ? (
                 <div className='text-gray-400 text-center w-full'>No Projects Found</div>
             ) : (list.slice(0, limit).map((item, index) => {
@@ -486,20 +505,6 @@ const ProjectList = ({ limit }) => {
                         </div>
                     )}
                 </div>
-
-
-                {
-                    deleteRepo && (
-
-                        <div>Delete Mode</div>
-                    )
-                }
-                {
-                    share && (
-
-                        <div>Share Mode</div>
-                    )
-                }
             }))}
         </div >
     )

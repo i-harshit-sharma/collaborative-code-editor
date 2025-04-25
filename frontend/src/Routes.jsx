@@ -1,5 +1,5 @@
-import { createBrowserRouter, Link, Outlet } from "react-router-dom";
-import React from "react";
+import { createBrowserRouter, Link, Outlet, useParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
 import Apps from "./pages/Apps.jsx";
 import New from "./pages/New.jsx";
 import Deployments from "./pages/Deployments.jsx";
@@ -15,6 +15,10 @@ import Landing from "./pages/Landing.jsx";
 import Try from "./pages/Try.jsx";
 import Editor from "./pages/Editor.jsx";
 import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
+import axios from "axios";
+import Test from "./pages/Test.jsx";
+import TestEditor from "./pages/TestEditor.jsx";
 
 // Layout wrapper for protected routes
 const AddUILayout = () => (
@@ -35,12 +39,54 @@ const ProtectedRoute = ({ children }) => (
 
 // Conditionally protect Editor: check `hasPermission` before rendering
 const ConditionallyProtect = ({ children }) => {
-  const hasPermission = true; // TODO: replace with real permission check
-  if (!hasPermission) {
-    // Not signed in or no permission: redirect
-    return (<><div>Permission Denied</div> <Login /></>);
+  const { id } = useParams();
+  const { isSignedIn, getToken } = useAuth();
+
+  const [hasPermission, setHasPermission] = useState(null); // null = loading, true/false = result
+
+  useEffect(() => {
+    const fetchPermission = async () => {
+      try {
+        const token = await getToken();
+        const response = await axios.get(
+          `http://localhost:4000/protected/check-repo/${id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            withCredentials: true,
+          }
+        );
+        setHasPermission(response.data.message === "User has access");
+      } catch (err) {
+        console.error("Permission check failed:", err);
+        setHasPermission(false);
+      }
+    };
+
+    if (isSignedIn) {
+      fetchPermission();
+    }
+  }, [id, isSignedIn, getToken]);
+
+  if (!isSignedIn) {
+    return <SignIn />;
   }
-  // Signed in + has permission
+
+  if (hasPermission === null) {
+    return <div>Checking permissions...</div>;
+  }
+
+  if (!hasPermission) {
+    return (
+      <div>
+        You currently do not have permission to access this path. Recheck the
+        URL or try again.
+      </div>
+    );
+  }
+
   return <SignedIn>{children}</SignedIn>;
 };
 
@@ -89,6 +135,14 @@ const routes = createBrowserRouter([
   {
     path: "/try",
     element: <Try />,
+  },
+  {
+    path: "/test",
+    element: <Test />,
+  },
+  {
+    path: "/test/editor/:id",
+    element: <TestEditor />,
   },
   {
     path: "/working",

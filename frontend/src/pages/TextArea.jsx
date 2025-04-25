@@ -1,138 +1,110 @@
-import React, { useState, useRef } from "react";
-import { CircleX, Image, Pen, SendHorizontal } from "lucide-react";
-import { Mistral } from "@mistralai/mistralai";
-// import { DNA } from 'react-loader-spinner'
+import React, { useState } from "react";
 
-export function TextArea(props) {
-    const [text, setText] = useState("");
-    const [imagePreview, setImagePreview] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const fileInputRef = useRef(null);
+function TextArea() {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
 
-    const handleTextChange = (e) => {
-        setText(e.target.value);
-    };
+  const handleSubmit = async () => {
+    if (!input.trim()) return;
 
-    const handleImageUploadClick = () => {
-        if (fileInputRef.current) {
-            fileInputRef.current.click();
+    const userMessage = { sender: "user", text: input };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setLoading(true);
+
+    const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
+      setMessages((prev) => [
+        ...prev,
+        { sender: "agent", text: "API key is missing." },
+      ]);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text: input }],
+              },
+            ],
+          }),
         }
-    };
+      );
 
-    const handleImageChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const previewUrl = URL.createObjectURL(file);
-            setImagePreview((prev) => [...prev, previewUrl]);
-        }
-    };
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error.message || "Failed to fetch data.");
+      }
+      const agentText =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+        "Sorry, I couldn't generate a response.";
 
-    const handleImageDelete = (url) => {
-        setImagePreview((prev) => prev.filter((img) => img !== url));
-    };
+      const agentMessage = { sender: "agent", text: agentText };
+      setMessages((prev) => [...prev, agentMessage]);
+    } catch (err) {
+      console.error(err);
+      setMessages((prev) => [
+        ...prev,
+        { sender: "agent", text: "Error reaching the assistant." },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const ImprovePrompt = async () => {
-        let t = text;
-        setText('')
-        setIsLoading(true); // Start loader
+  return (
+    <div className=" flex flex-col items-center p-4">
+      {/* <h1 className="text-2xl font-bold mb-4">🧠 Code Assistant</h1> */}
 
-        try {
-            const apiKey = import.meta.env.VITE_MISTRAL_API_KEY;
-            const client = new Mistral({ apiKey: apiKey });
-            const chatResponse = await client.agents.complete({
-                agentId: "ag:d9f93acc:20250416:untitled-agent:d9a7612d",
-                messages: [{ role: 'user', content: t }],
-            });
+      <div className="w-full max-w-2xl shadow-md rounded-lg flex flex-col p-4 space-y-4 h-[70vh] overflow-y-auto border border-dark-1 no-scrollbar">
+        {messages.map((msg, idx) => (
+          <div
+            key={idx}
+            className={`px-2 py-1 rounded-lg whitespace-pre-wrap max-w-[80%] ${msg.sender === "user"
+              ? "bg-dark-4 self-end text-right"
+              : "bg-dark-4  border-dark-1 self-start"
+              }`}
+          >
+            {msg.text}
+          </div>
+        ))}
+        {loading && (
+          <div class="flex items-center space-x-1">
+            <span class="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+            <span class="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+            <span class="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></span>
+          </div>
 
-            setText(chatResponse.choices[0].message.content);
-        } catch (error) {
-            console.error("Error while improving prompt:", error);
-        } finally {
-            setIsLoading(false); // Stop loader
-        }
-    };
+        )}
+      </div>
 
-
-    return (
-        <div className="relative w-full border-1 border-dark-1 rounded p-2 transition-colors focus-within:border-blue-500 focus-within:shadow-md">
-            {imagePreview.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                    {imagePreview.map((image, index) => (
-                        <div key={index} className="relative w-fit">
-                            <CircleX
-                                size={12}
-                                className="absolute top-[-3px] right-[-3px] text-red-700 cursor-pointer"
-                                fill="#ffffff"
-                                onClick={() => handleImageDelete(image)}
-                            />
-                            <img
-                                src={image}
-                                alt="Preview"
-                                className="max-h-14 rounded border"
-                            />
-                        </div>
-                    ))}
-                </div>
-            )}
-            <textarea
-                className="w-full rounded-md p-2 pr-10 focus:outline-none focus:ring-0 resize-none"
-                placeholder="Type your message here..."
-                rows={4}
-                value={text}
-                disabled={isLoading} // Disable textarea when loading
-                onChange={handleTextChange}
-                {...props}
-            />
-            {/* {isLoading && (
-            <DNA
-                visible={true}
-                height="80"
-                width="80"
-                ariaLabel="dna-loading"
-                wrapperStyle={{position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)"}}
-                wrapperClass="dna-wrapper"
-            />)} */}
-
-            {/* Image upload buttons */}
-            <div className="bottom-2 flex items-center justify-between">
-                <button
-                    type="button"
-                    className="text-gray-500 cursor-pointer hover:text-gray-700"
-                    onClick={handleImageUploadClick}
-                >
-                    <Image size={18} />
-                </button>
-                <div className="flex gap-2">
-
-                    <button
-                        type="button"
-                        className="text-gray-500 hover:text-gray-700 cursor-pointer"
-                        onClick={ImprovePrompt}
-                        disabled={isLoading}
-                    >
-                        <Pen size={16} />
-                    </button>
-
-                    <button
-                        type="button"
-                        className="bg-blue-500/20 px-2 text-sm py-1 rounded flex items-center gap-2 cursor-pointer"
-                        disabled={isLoading}
-                        // onClick={handleImageUploadClick}
-                    >
-
-                        Start Building
-                        <SendHorizontal size={12} />
-                    </button>
-                </div>
-            </div>
-
-            <input
-                type="file"
-                accept="image/*"
-                ref={fileInputRef}
-                onChange={handleImageChange}
-                className="hidden"
-            />
-        </div>
-    );
+      <div className="w-full max-w-2xl mt-4 flex">
+        <input
+          type="text"
+          className="flex-1 p-3 border border-dark-1 rounded-l-lg focus:outline-none outline-0 ring-0 focus:border-1 focus:border-blue-1"
+          placeholder="Ask a coding question..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+        />
+        <button
+          className="bg-blue-600 text-white px-4 py-3 rounded-r-lg hover:bg-blue-700 transition cursor-pointer"
+          onClick={handleSubmit}
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
 }
+
+export default TextArea;

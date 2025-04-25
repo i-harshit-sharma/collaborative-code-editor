@@ -1,11 +1,12 @@
 import React, { use, useEffect, useState } from 'react'
-import { TextArea } from './TextArea';
+import TextArea from './TextArea';
 import ProjectList from '../components/ProjectList';
 import { ArrowRight } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react'
 import axios from 'axios';
 import { useAuth } from '@clerk/clerk-react';
 import { Link } from 'react-router-dom';
+import New from './New';
 
 const userName = "mailmehere090"
 
@@ -34,27 +35,27 @@ const Home = () => {
   };
   const handleSend = async () => {
     try {
-      const get = async ()=>{
+      const get = async () => {
         const token = await getToken()
         const repos = await axios.post("http://localhost:4000/protected/create-repo",
-          {repoName, language, type},
+          { repoName, language, type },
           {
-          headers:{
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          withCredentials: true,
-        })
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            withCredentials: true,
+          })
         console.log(repos.data)
         setList(repos.data.user.repos)
         setRepoName('')
         setLanguage('')
-        setType('')        
+        setType('')
       }
       get();
     } catch (error) {
       console.error(error);
-      
+
     }
   };
 
@@ -62,12 +63,13 @@ const Home = () => {
   console.log(list);
   return (
     <div className='flex-grow h-full overflow-y-scroll no-scrollbar'>
-      <section className='w-full flex flex-col items-center justify-center h-96'>
+      <section className='w-full flex flex-col items-center justify-center '>
         <h1 className='text-2xl font-semibold '>Hi <span className='bg-gradient-to-r from-blue-400 to-blue-1 text-transparent bg-clip-text'>{user?.firstName}</span> What do you want to make today?</h1>
         <div className='w-[760px]'>
           <TextArea />
           <div className='flex'>
-            <span>Here Ideas come</span>
+
+            {/* <span>Here Ideas come</span> */}
           </div>
         </div>
       </section>
@@ -80,47 +82,49 @@ const Home = () => {
             </Link>
           </div>
 
-            <ProjectList limit={3}/>
+          <ProjectList limit={3} />
         </div>
       </section>
-      <button className='bg-red-400 px-4 py-2'
+      {/* <button className='bg-red-400 px-4 py-2'
         onClick={handleClick}
-      >Click Me</button>
+      >Click Me</button> */}
       <section className='w-full flex flex-col items-center justify-center mt-4'>
-        <div className='w-[760px]'>
-          <h2 className='text-lg font-semibold mb-2'>Add a New Repository</h2>
+        <Link to="/new" className='w-[760px] border border-dark-1 mb-6 rounded-lg cursor-pointer hover:bg-blue-1 hover:text-white text-blue-1 text-sm'>
+          <h2 className='font-semibold mb-2 text-center py-2 '>Add a New Repository</h2>
+          {/* <New/>
           <div className='flex flex-col gap-4'>
-        <input
-          type='text'
-          placeholder='Repository Name'
-          className='border px-4 py-2 rounded'
-          value={repoName}
-          onChange={(e) => setRepoName(e.target.value)}
-        />
-        <input
-          type='text'
-          placeholder='Language'
-          className='border px-4 py-2 rounded'
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-        />
-        <input
-          type='text'
-          placeholder='Type'
-          className='border px-4 py-2 rounded'
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-        />
-        <button
-          className='bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600'
-          onClick={handleSend}
-        >
-          Add Repository
-        </button>
-          </div>
-        </div>
+            <input
+              type='text'
+              placeholder='Repository Name'
+              className='border px-4 py-2 rounded'
+              value={repoName}
+              onChange={(e) => setRepoName(e.target.value)}
+            />
+            <input
+              type='text'
+              placeholder='Language'
+              className='border px-4 py-2 rounded'
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+            />
+            <input
+              type='text'
+              placeholder='Type'
+              className='border px-4 py-2 rounded'
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+            />
+            <button
+              className='bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600'
+              onClick={handleSend}
+            >
+              Add Repository
+            </button>
+            {repoName}, {language}, {type}
+          </div> */}
+        </Link>
       </section>
-      
+
     </div>
 
   )

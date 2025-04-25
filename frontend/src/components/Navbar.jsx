@@ -2,31 +2,12 @@ import React, { useEffect, useRef, useState } from 'react'
 import { HelpDropDown, NotificationDropDown, OrgDropDown } from './OrgDropDown'
 import { Folder, PanelLeftClose, PanelLeftOpen, Plus, Search } from 'lucide-react'
 import RenderSign from '../utils/RenderSign';
-import { SignedIn, SignedOut, SignInButton } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/clerk-react'
 import { UserButton } from '@clerk/clerk-react'
+import { Link, useParams } from 'react-router-dom';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
-const data = [
-    {
-        language: "React",
-        title: "mailmehere090/OutrageousMemorableTransformations",
-        description: "edited 2 days ago",
-    },
-    {
-        language: "HTML",
-        title: "mailmehere090/Animations",
-        description: "edited 3 months ago",
-    },
-    {
-        language: "Node",
-        title: "mailmehere090/Node.js",
-        description: "edited 4 months ago",
-    },
-    {
-        language: "Python",
-        title: "mailmehere090/DataScienceProjects",
-        description: "edited 1 week ago",
-    },
-]
 
 const notificationsArray = [
     {
@@ -91,25 +72,99 @@ const notificationsArray = [
     },
 ]
 
+function getTimeAgo(date) {
+    const now = new Date();
+    const past = new Date(date);
+    const diff = now - past; // in ms
 
-const SearchResults = ({ icon, title, description, }) => {
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const months = Math.floor(diff / (1000 * 60 * 60 * 24 * 30));
+    const years = Math.floor(diff / (1000 * 60 * 60 * 24 * 365));
+
+    if (seconds < 60) return 'just now';
+    if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+    if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+    return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
+
+const SearchResults = ({ icon, title, description, lnk}) => {
     return (
-        <div className='group flex flex-start hover:bg-dark-2 py-1.5 items-center gap-2 px-2 border-t-2 border-t-dark-2/40 cursor-pointer'>
+        <Link to={lnk} className='group flex flex-start hover:bg-dark-2 py-1.5 items-center gap-2 px-2 border-t-2 border-t-dark-2/40 cursor-pointer w-full'>
             <div className='flex min-w-fit justify-center items-center bg-dark-2 group-hover:bg-[#063b72] px-2 py-1 rounded gap-1 transition-colors'>
                 <span>{icon}</span>
                 <span className='text-sm select-none'>{title}</span>
             </div>
             <div className='text-nowrap text-xs overflow-hidden select-none'>{description}</div>
-        </div>
+            {/* {lnk && <Link to={lnk} className=''>{lnk}</Link>} */}
+        </Link>
     );
 };
 
 
-const Navbar = ({ isOpen, toggleNavbar }) => {
+const Navbar = ({
+    isOpen,
+    toggleNavbar }) => {
     const [query, setQuery] = useState("");
     const [open, setOpen] = useState(false)
     const SearchInput = useRef(null);
     const [notifications, setNotifications] = useState(notificationsArray);
+    const [data, setData] = useState([]);
+    const {getToken} = useAuth();
+    const containerRef = useRef(null);
+  
+
+    useEffect(() => {
+        const get = async () => {
+            try {
+                const token = await getToken();
+                const response = await axios.get("http://localhost:4000/protected/get-repos", {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    withCredentials: true,
+                });
+                console.log(response.data)
+                setData(response.data)
+            } catch (error) {
+                console.error(error);
+            }
+            try {
+                const token = await getToken();
+                const response = await axios.get("http://localhost:4000/protected/get-shared-repos", {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    withCredentials: true,
+                });
+                console.log(response.data)
+                setData((prev) => [...prev, ...response.data])
+            } catch (error) {
+                console.error(error);
+            }
+        }
+        get()
+    }, [])
+    console.log(data)
+
+    useEffect(() => {
+        const onClick = e => {
+          if (containerRef.current && !containerRef.current.contains(e.target)) {
+            setOpen(false);
+          }
+        };
+        document.addEventListener('mousedown', onClick);
+        return () => document.removeEventListener('mousedown', onClick);
+      }, []);
+    
+
     const handleNotifications = (index) => {
         const newNotifications = [...notifications];
         newNotifications[index].status = "read";
@@ -117,7 +172,7 @@ const Navbar = ({ isOpen, toggleNavbar }) => {
     };
 
     const filtered = data.filter(item =>
-        item.title.toLowerCase().includes(query.toLowerCase())
+        item?.repoName?.toLowerCase().includes(query?.toLowerCase())
     );
 
     useEffect(() => {
@@ -143,12 +198,13 @@ const Navbar = ({ isOpen, toggleNavbar }) => {
                     <PanelLeftClose size={28} className="p-1.5 hover:bg-dark-1 rounded"  onClick={toggleNavbar} /> :
                     <PanelLeftOpen  size={28} className="p-1.5 hover:bg-dark-1 rounded"  onClick={toggleNavbar}/>
                 }
-                <p className='text-xl font-bold ml-2'>Code Together</p>
+                <p className='text-xl font-bold ml-2'>Code Collab</p>
             </div>
-            <div className=' border-1 border-dark-2 absolute top-2 left-1/2 transform -translate-x-1/2 bg-dark-4 rounded-sm lg:w-[530px] flex flex-col'>
+            <div className=' border-1 border-dark-2 absolute top-2 left-1/2 transform -translate-x-1/2 bg-dark-4 rounded-sm lg:w-[530px] flex flex-col' 
+                ref={containerRef}>
                 <div className='flex items-center gap-2 w-full h-full px-2'>
                     <Search size={20} />
-                    <input type="text" ref={SearchInput} className='w-full h-full bg-transparent border-none outline-none text-gray-300 placeholder:text-gray-300 text-sm hover:text-gray-50' placeholder='Search...' onChange={(e) => setQuery(e.target.value)} value={query} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}
+                    <input type="text" ref={SearchInput} className='w-full h-full bg-transparent border-none outline-none text-gray-300 placeholder:text-gray-300 text-sm hover:text-gray-50' placeholder='Search...' onChange={(e) => setQuery(e.target.value)} value={query} onFocus={() => setOpen(true)} 
                     />
                     <div className='p-1'>
                         <span className='border-1 text-sm border-dark-2 px-1 rounded'>Ctrl</span>
@@ -158,20 +214,21 @@ const Navbar = ({ isOpen, toggleNavbar }) => {
                 </div>
                 {/* Dropdown for search results */}
                 {open && <ul>
-                    <SearchResults icon={<Plus size={16} />} title="New" description="Create a New App" />
-                    <SearchResults icon={<Folder size={16} />} title="My Apps" description="Search your Apps" />
+                    <SearchResults icon={<Plus size={16} />} title="New" description="Create a New App" lnk={`http://localhost:5173/new`}/>
+                    <SearchResults icon={<Folder size={16} />} title="My Apps" description="Search your Apps" lnk={`http://localhost:5173/apps`}/>
                 </ul>}
+                {/* {query} */}
                 {open && !!query.length && <ul className='cursor-pointer'>
                     {filtered.map((item, i) => (
-                        <SearchResults key={i} icon={<RenderSign language={item.language} />} title={item.title} description={item.description} />
+                        <SearchResults key={i} icon={<RenderSign language={item.language} />} title={item.repoName} description={getTimeAgo(item.createdAt)} lnk={`http://localhost:5173/editor/${item.vmId}`}/>
                     ))}
                 </ul>}
             </div>
 
             <div className='h-6 flex gap-2 items-center'>
-                <NotificationDropDown notifications={notifications} setNotifications={handleNotifications} />
+                {/*<NotificationDropDown notifications={notifications} setNotifications={handleNotifications} />*/}
                 <div className='p-1.5 hover:bg-dark-1 rounded cursor-pointer'>
-                    <HelpDropDown />
+                    {/* <HelpDropDown /> */}
                 </div>
                 <SignedIn>
                     <UserButton />

@@ -105,3 +105,23 @@ body>div:nth-child(5) {
 	height: 0 !important;
 	width: 0 !important;
 }
+
+.remote-cursor::after {
+	content: '';
+	border-left: 2px solid red;
+	height: 100%;
+	display: inline-block;
+	position: absolute;
+}
+
+.remote-cursor-label::after {
+	content: attr(data-username);
+	background-color: rgba(255, 0, 0, 0.1);
+	color: red;
+	font-size: 0.75rem;
+	padding: 2px 4px;
+	border-radius: 4px;
+	position: absolute;
+	top: -1.2em;
+	left: 0;
+}

@@ -13,14 +13,14 @@ if (!PUBLISHABLE_KEY) {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/sign-in" 
+  // <React.StrictMode>
+  <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/sign-in"
     // afterSignInUrl="/app"
     signInFallbackRedirectUrl="/app"
-    >
-      <RouterProvider router={routes} >
-        <App />
-      </RouterProvider>
-    </ClerkProvider>
-  </React.StrictMode>,
+  >
+    <RouterProvider router={routes} >
+      <App />
+    </RouterProvider>
+  </ClerkProvider>
+  // </React.StrictMode>,
 )

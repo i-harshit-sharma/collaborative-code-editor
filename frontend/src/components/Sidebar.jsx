@@ -65,7 +65,7 @@ const Sidebar = ({ isOpen }) => {
               Past Meetings
             </div>
           </div>
-          <div className='border-b-1 border-b-dark-1 text-gray-300 group-hover:text-white '>
+          {/* <div className='border-b-1 border-b-dark-1 text-gray-300 group-hover:text-white '>
             <div className="flex items-center gap-2  p-1.5 cursor-pointer select-none rounded text-xs m-1">
               Your Apps
             </div>
@@ -77,9 +77,9 @@ const Sidebar = ({ isOpen }) => {
               <Presentation size={16} />
               Past Meetings
             </div>
-          </div>
+          </div> */}
             <div className='text-sm flex items-center p-1 justify-between mx-1'>
-              Install CodeTogether
+              Install Code Collab
               <Monitor size={16} className='cursor-pointer'/>
               </div>
         </div>

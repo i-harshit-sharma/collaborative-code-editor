@@ -35,7 +35,7 @@ const TechStack = () => {
                 Develop anywhere, <br className="block " />
                 with{" "}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300">
-                    CodeTogether
+                    Code Collab
                 </span>
             </h2>
 
@@ -59,18 +59,18 @@ const Landing = () => {
 
     return (
 
-        <div className="min-h-screen bg-[#0e1525] text-white font-sans ">
+        <div className="w-full bg-[#0e1525] text-white font-sans ">
             {/* Navbar */}
             <header className="flex items-center justify-between px-6 py-4 border-b-1 border-dark-3">
                 <div className="flex items-center space-x-12">
-                    <div className="text-2xl font-bold">✳ CodeTogether</div>
+                    <div className="text-2xl font-bold">✳ CodeCollab</div>
                     <nav className="space-x-6 text-gray-300 text-sm">
-                        <Link to="/working" className="hover:text-white">How it works</Link>
-                        <Link  to="/about" className="hover:text-white">About</Link>
+                        {/* <Link to="/working" className="hover:text-white">How it works</Link> */}
+                        {/* <Link  to="/about" className="hover:text-white">About</Link> */}
                     </nav>
                 </div>
                 <div className="flex gap-3">
-                    <Link to="/try" className="flex gap-2 items-center justify-center border-dark-3 border text-gray-300 px-4 py-1 rounded hover:bg-gray-700 text-sm cursor-pointer">Try without logging in <MoveRight color="#fff" size={14} /></Link>
+                    <Link to="/try" className="flex gap-2 items-center justify-center border-dark-3 border text-gray-300 px-4 py-1 rounded hover:bg-gray-700 text-sm cursor-pointer">Try editor <MoveRight color="#fff" size={14} /></Link>
                     <Link to="/sign-in" className="border-dark-3 border text-gray-300 px-4 py-1 rounded hover:bg-gray-700 text-sm cursor-pointer">Login</Link>
                 </div>
             </header>
@@ -132,13 +132,13 @@ const Landing = () => {
                     <div className="absolute bottom-0 h-1 w-7/12 shadow-[0_2px_30px_10px_rgba(0,255,255,0.4)] rounded-full"></div>
                     </div>
                 </section>
-                <div className=" bg-black w-full z-0 p-3 flex items-center justify-center">
+                <div className=" bg-[#0e1525] w-full z-0 p-3 flex items-center justify-center">
                     <div className="flex gap-2">
-                    <Instagram color="#fff" />
+                    {/* <Instagram color="#fff" />
                     <Twitter color="#fff" />
                     <Facebook color="#fff" />
-                    <Linkedin color="#fff" />
-                    Created with <Heart color="#fff" /> by Harshit 
+                    <Linkedin color="#fff" /> */}
+                    Created by Harshit, Bhavay and Dheeraj
                     </div>
 
                 </div>

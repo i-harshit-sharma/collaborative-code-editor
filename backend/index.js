@@ -14,6 +14,22 @@ import pty from '@lydell/node-pty';
 import { randomBytes } from 'crypto';
 import { Server } from 'socket.io';
 import http from 'http';
+import multer from 'multer';
+import fs from 'fs-extra';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const tmpDir = path.join(__dirname, 'tmp');
+if (!fs.existsSync(tmpDir)) {
+  fs.mkdirSync(tmpDir, { recursive: true });
+}
+
+const upload = multer({ dest: "uploads/" });
+
 
 dotenv.config();
 const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
@@ -29,24 +45,8 @@ app.use(cors({
   origin: 'http://localhost:5173',
   credentials: true,
 }));
-// // app.use(cors())
-// app.use(express.json())
 
-// const server = http.createServer(app);
-
-// const io = new Server(server, {
-//   cors: {
-//     origin: 'http://localhost:5173',
-//     methods: ['GET', 'POST'],
-//   },
-// });
-
-// app.use(cors({
-//   origin: 'http://localhost:5173',  // Allow requests from your frontend
-//   methods: ['GET', 'POST'],
-//   credentials: true,
-// }));
-
+app.use(express.json());
 
 async function createContainerFromImages(imageList, language) {
   for (const imageObj of imageList) {
@@ -98,6 +98,35 @@ app.get('/test', (req, res) => {
   res.send('Test Successful!');
 });
 
+
+app.post("/upload", upload.array("files"), async (req, res) => {
+  const files = req.files;
+  const containerId = req.body.containerId;
+  console.log(containerId);
+  const targetPath = "/app";
+
+  try {
+    for (const file of files) {
+      const destPath = path.join("temp_upload", file.originalname);
+      await fs.move(file.path, destPath, { overwrite: true });
+
+      // Copy file into the Docker container's /app folder
+      console.log("Updating container with file:", `docker cp ${destPath} ${containerId}:${targetPath}`);
+      exec(`docker cp ${destPath} ${containerId}:${targetPath}`, (err, stdout, stderr) => {
+        if (err) {
+          console.error(`Error copying file to Docker: ${stderr}`);
+        }
+      });
+      io.emit('filesReady', 'files are ready to be read');
+    }
+
+    res.status(200).send("Files transferred to container");
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Failed to upload files");
+  }
+});
+
 app.get('/protected/get-repos', async (req, res) => {
   const authHeader = req.headers.authorization;
 
@@ -136,7 +165,7 @@ app.post('/protected/create-repo', async (req, res) => {
   const payload = jwtDecode(token);
   let containerId = "1234"; // Initialize containerId to null
   const imageList = [
-    { ubuntu: 'ubuntu' },
+    { cpp: 'ubuntu' },
     { node: 'my-node-image' },
     { python: 'my-conda-python-image' }
   ];
@@ -244,9 +273,12 @@ app.post('/protected/share-repo/', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const repo = user.repos.id(id);
+    let repo = user.repos.id(id);
     if (!repo) {
-      return res.status(404).json({ error: 'Repository not found' });
+      repo = user.repos.find((repo) => repo.vmId === id);
+      if (!repo) {
+        return res.status(404).json({ error: 'Repository not found' });
+      }
     }
     const userId = userList.data[0].id;
     repo.access = obj.shareConfig[0];
@@ -264,6 +296,88 @@ app.post('/protected/share-repo/', async (req, res) => {
     res.json(repo);
   } catch (error) {
     console.log(error.message)
+  }
+});
+
+app.post("/api/clone", async (req, res) => {
+  let language = 'python'
+  let type = 'public';
+  console.log("started")
+  const { url, repoName } = req.body;
+  // if (!url || !/^https?:\/\/.+\.git$/.test(url)) {
+  //   return res.status(400).json({ error: "Invalid Git URL" });
+  // }
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized - No token found' });
+  }
+
+  console.log(authHeader)
+  const token = authHeader.split(' ')[1]; // remove 'Bearer '
+  const payload = jwtDecode(token);
+
+  console.log("Payload:", payload);
+
+  const volumeName = "repos_data";
+
+  try {
+    // 1. Ensure volume exists
+    try {
+      await docker.getVolume(volumeName).inspect();
+    } catch {
+      await docker.createVolume({ Name: volumeName });
+    }
+
+    // 2. Pull the git image (if not on host)
+    await new Promise((resolve, reject) => {
+      docker.pull("alpine/git:latest", (err, stream) => {
+        if (err) return reject(err);
+        docker.modem.followProgress(stream, onFinished, onProgress);
+        function onFinished(err) {
+          err ? reject(err) : resolve();
+        }
+        function onProgress() {
+          /* you could log progress here */
+        }
+      });
+    });
+
+    // 3. Create the container
+    const container = await docker.createContainer({
+      Image: "alpine/git:latest",
+      Cmd: ["clone", url, "/app"],
+      HostConfig: {
+        Binds: [`${volumeName}:/app`],   // mount named volume → /app
+        AutoRemove: true,                 // clean up when done
+      },
+    });
+
+    // 4. Start & wait for it to finish
+    await container.start();
+    await container.wait();
+
+
+    console.log("Clone operation completed successfully.");
+    console.log(container)
+    const user = await User.findOne({ userId: payload.sub });
+    if (!user) {
+      const newUser = new User({ userId: payload.sub, repos: [] });
+      await newUser.save();
+      newUser.repos.push({ repoName, language, type, vmId: container.id, sharedUsers: [] });
+      newUser.repos[0].sharedUsers.push({ userId: payload.sub, role: 'Owner' });
+      await newUser.save();
+
+    }
+    else {
+      user.repos.push({ repoName, language, type, vmId: container.id, sharedUsers: [] });
+      user.repos[user.repos.length - 1].sharedUsers.push({ userId: payload.sub, role: 'Owner' });
+      await user.save();
+
+      res.json({ message: "Repository successfully cloned into Docker volume." });
+    }
+  } catch (err) {
+    console.error("Clone error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -303,6 +417,198 @@ app.get('/protected/get-shared-users/:id', async (req, res) => {
   res.json({ sharedUsers, access: repo.access, action: repo.action, vmId: repo.vmId });
 })
 
+app.get('/:vmId/shared-users', async (req, res) => {
+  const { vmId } = req.params;
+  console.log("vmId", vmId)
+  const userList = await clerkClient.users.getUserList();
+
+  try {
+    const userDoc = await User.findOne(
+      { 'repos.vmId': vmId },
+      { 'repos.$': 1 }            // MongoDB positional projection
+    ).lean();
+
+    if (!userDoc || !userDoc.repos || userDoc.repos.length === 0) {
+      return res.status(404).json({ message: 'VM not found' });
+    }
+    const sharedUsers = userDoc.repos[0].sharedUsers;
+    let users = []
+    console.log(sharedUsers);
+    for (const sharedUser of sharedUsers) {
+      const user = userList.data.find(user => user.id === sharedUser.userId);
+      console.log(user);
+      users.push({ name: user.firstName + " " + user.lastName, role: sharedUser.role, img: user.imageUrl });
+    }
+    return res.json({ users });
+  } catch (err) {
+    console.error('Error fetching sharedUsers:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+app.get('/search', async (req, res) => {
+  const { term, container } = req.query;
+
+  if (!term || !container) {
+    return res.status(400).json({ error: 'Search term and container name/id are required' });
+  }
+
+  // Construct the docker exec command
+  // docker exec e94ab2… bash -lc "grep -riI --color=never 'app' /app 2>/dev/null"
+
+  // const cmd = `docker exec ${container} bash -lc grep -riI --color=never '${term}' 2>/dev/null`;
+  const cmd = `docker exec ${container} bash -lc "grep -riI --color=never '${term}' /app 2>/dev/null"`;
+
+
+  exec(cmd, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error: ${error.message}`);
+      return res.status(500).json({ error: error.message });
+    }
+
+    const lines = stdout.trim().split('\n').filter(Boolean).map(line => {
+      const [filePath, ...rest] = line.split(':');
+      return {
+        file: filePath,
+        match: rest.join(':').trim(),
+      };
+    });
+
+    res.json({ matches: lines });
+  });
+});
+
+
+
+const getSharedReposForUser = async (targetUserId) => {
+  try {
+    const usersWithSharedRepos = await User.find(
+      { "repos.sharedUsers.userId": targetUserId },
+      {
+        repos: {
+          $filter: {
+            input: "$repos",
+            as: "repo",
+            cond: {
+              $in: [targetUserId, "$$repo.sharedUsers.userId"]
+            }
+          }
+        },
+        userId: 1
+      }
+    );
+
+    // Flatten the shared repos
+    const sharedRepos = usersWithSharedRepos.flatMap(user =>
+      user.repos.filter(repo =>
+        repo.sharedUsers.some(shared => shared.userId === targetUserId)
+      ).map(repo => ({
+        repoName: repo.repoName,
+        owner: user.userId,
+        role: repo.sharedUsers.find(u => u.userId === targetUserId)?.role,
+        language: repo.language,
+        type: repo.type,
+        vmId: repo.vmId,
+        createdAt: repo.createdAt,
+        updatedAt: repo.updatedAt,
+      }))
+    );
+
+    return sharedRepos;
+  } catch (err) {
+    console.error(err);
+    return [];
+  }
+};
+
+
+app.get('/protected/get-shared-repos', async (req, res) => {
+  // const { id } = req.params;
+  const authHeader = req.headers.authorization;
+  const userList = await clerkClient.users.getUserList()
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized - No token found' });
+  }
+
+  const token = authHeader.split(' ')[1]; // remove 'Bearer '
+  const payload = jwtDecode(token);
+
+  // const user = await User.findOne({ userId: payload.sub });
+  // if (!user) {
+  //   return res.status(404).json({ error: 'User not found' });
+  // }
+
+  // const repo = user.repos.id(id);
+  // if (!repo) {
+  //   return res.status(404).json({ error: 'Repository not found' });
+  // }
+  const repos = await getSharedReposForUser(payload.sub);
+  if (!repos) {
+    return res.status(404).json({ error: 'No shared repos found' });
+  }
+
+  //Get userInfo from clerk
+  console.log(repos.filter(repo => repo.owner !== payload.sub))
+
+  res.json(repos.filter(repo => repo.owner !== payload.sub));
+})
+
+const getSharedUserIdsByVmId = async (vmId) => {
+  try {
+    const users = await User.find({
+      "repos.vmId": vmId
+    }, {
+      "repos.$": 1  // Use positional operator to return only the matching repo
+    });
+
+    const sharedUserIds = [];
+
+    users.forEach(user => {
+      user.repos.forEach(repo => {
+        if (repo.vmId === vmId && repo.sharedUsers) {
+          repo.sharedUsers.forEach(sharedUser => {
+            sharedUserIds.push(sharedUser.userId);
+          });
+        }
+      });
+    });
+
+    return sharedUserIds;
+  } catch (error) {
+    console.error("Error fetching shared users:", error);
+    throw error;
+  }
+};
+
+
+app.get('/protected/check-repo/:id', async (req, res) => {
+  const { id } = req.params;
+  const authHeader = req.headers.authorization;
+  const userList = await clerkClient.users.getUserList()
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized - No token found' });
+  }
+
+  const token = authHeader.split(' ')[1]; // remove 'Bearer '
+  const payload = jwtDecode(token);
+
+  const user = await User.findOne({ userId: payload.sub });
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const users = await getSharedUserIdsByVmId(id);
+  if (users.find(user => user === payload.sub)) {
+    return res.status(200).json({ message: 'User has access' });
+  }
+
+  return res.status(403).json({ message: 'User does not have access' });
+
+})
+
 
 
 
@@ -316,245 +622,317 @@ const io = new Server(server, {
   }
 });
 
-
-io.engine.use((req, res, next) => {
-  const isHandshake = req._query.sid === undefined;
-  if (!isHandshake) {
-    return next();
-  }
-
-  const header = req.headers["authorization"];
-
-  if (!header) {
-    return next(new Error("no token"));
-  }
-
-  if (!header.startsWith("bearer ")) {
-    return next(new Error("invalid token"));
-  }
-  console.log(header) 
-  const token = header.substring(7);
-  console.log(token)
-  // jwt.verify(token, jwtSecret, (err, decoded) => {
-  //   if (err) {
-  //     return next(new Error("invalid token"));
-  //   }
-  //   req.user = decoded.data;
-    next();
-  // });
-});
+// const backend = new ShareDB();
+const rooms = {};
+// const users = [];
+let userList = [];
+setInterval(async () => {
+  userList = await clerkClient.users.getUserList();
+}, 10000);
 
 
+io.on('connection', (socket) => {
+  console.log('🔌 Socket connected:', socket.id);
+  // Ask client to send token+container info
+  socket.emit('sendToken', 'Send token');
 
-io.on('connection', async (socket) => {
-  console.log('🟢 Client connected:', socket.id);
-  //get userId from socket
-  const token = socket.handshake.auth; // Get the token from the socket handshake
-  // console.log('Token:', token);
-  if (!token) {
-    return socket.emit('output', 'Unauthorized - No token found');
-  }
-  // console.log('Token:', token);
-  // const payload = jwtDecode(token);
-  // const userId = payload.sub;
-  // console.log('User ID:', userId);
+  socket.on('sendToken', async ({ token, containerId }) => {
+    console.log('Received containerId:', containerId);
 
-
-  console.log('Socket ID:', socket.id);
-
-  let containerIdOrName = '4ef1ca55fc6a8101220ee549d5f57af2532a66fe38904e049d2d753a850299da'; // 🔁 your container name or ID here
-
-  let container = docker.getContainer(containerIdOrName);
-  // console.log(container)
-
-
-  try {
-    const containerInfo = await container.inspect();
-    if (!containerInfo.State.Running) {
-      await container.start();
-    }
-  } catch (err) {
+    // Decode JWT
+    let payload;
     try {
-      const newContainer = await docker.createContainer({
-        Image: 'ubuntu',
-        name: randomBytes(8).toString('hex'),
-        Tty: true,
-        Cmd: ['/bin/bash'],
-      });
-      await newContainer.start();
-      container = newContainer;
-      console.log('New container started:', container.id);
-      containerIdOrName = container.id;
+      payload = jwtDecode(token);
     } catch (err) {
-      console.error('Failed to create or start new container:', err);
-      socket.emit('output', 'Error: Failed to create or start new container.');
-      // return;
-
-      socket.emit('output', 'Error: Container not found.');
-      // return;
+      console.error('Invalid token:', err);
+      socket.emit('output', 'Error: Invalid token.');
+      return;
     }
-    socket.emit('output', 'Error: Container not found or failed to start.');
-    // return;
-  }
 
-  // Attach to existing container
-  // console.log("container Id",containerIdOrName)
-  const ptyProcess = pty.spawn('docker', ['exec', '-it', containerIdOrName, '/bin/bash'], {
-    name: 'xterm-color',
-    cols: 80,
-    rows: 24,
-    cwd: process.env.HOME,
-    env: process.env,
+    // Verify user exists
+    let user;
+    try {
+      user = await User.findOne({ userId: payload.sub });
+    } catch (err) {
+      console.error('Database lookup error:', err);
+      socket.emit('output', 'Error: Database error.');
+      return;
+    }
+    if (!user) {
+      console.error('User not found in DB:', payload.sub);
+      socket.emit('output', 'Error: User not found.');
+      return;
+    }
+    console.log('Decoded Token Payload (sub):', payload.sub);
+
+    // Get or create Docker container
+    let container = docker.getContainer(containerId);
+    let containerIdOrName = containerId;
+    try {
+      const info = await container.inspect();
+      if (!info.State.Running) {
+        await container.start();
+        console.log('Started existing container:', containerIdOrName);
+      }
+    } catch (err) {
+      console.log('Container not found or not running, creating a new one');
+      try {
+        container = await docker.createContainer({
+          Image: 'ubuntu',
+          name: randomBytes(4).toString('hex'),
+          Tty: true,
+          Cmd: ['/bin/bash'],
+        });
+        await container.start();
+        containerIdOrName = container.id;
+        console.log('✅ New container started:', containerIdOrName);
+      } catch (createErr) {
+        console.error('❌ Failed to create or start container:', createErr);
+        socket.emit('output', 'Error: Failed to create or start new container.');
+        return;
+      }
+    }
+
+    // Spawn a pty bash session inside the container
+    const ptyProcess = pty.spawn('docker', ['exec', '-it', containerIdOrName, '/bin/bash'], {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 12,
+      cwd: process.env.HOME,
+      env: process.env,
+    });
+
+    console.log('🔥 PTY session started for container:', containerIdOrName);
+
+    // (Optional) run your install script immediately
+    const installScript = `
+export DEBIAN_FRONTEND=noninteractive && \
+apt-get update && \
+apt-get install -y \
+  gcc make build-essential git curl wget unzip zsh tmux nano neofetch tzdata vim locales && \
+ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime && \
+dpkg-reconfigure --frontend noninteractive tzdata && \
+curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | \
+  tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && \
+echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | \
+  tee /etc/apt/sources.list.d/ngrok.list && \
+apt update && apt install -y ngrok && \
+ngrok config add-authtoken YOUR_NGROK_TOKEN && \
+echo "✅ Installed development tools and configured tzdata"
+`;
+    ptyProcess.write(`${installScript}\n`);
+
+    //Send signal for files ready
+
+
+    // socket.emit('filesReady', 'files are ready to be read');
+
+    // socket.on('getFiles', (data) => {
+    //   // console.log('getFiles event received:', data);
+    //   const cmd = `docker exec ${data.id} ls -laR ${data.path}`;
+
+    //   exec(cmd, (error, stdout, stderr) => {
+    //     if (error) {
+    //       return socket.emit('files', { error: stderr });
+    //     }
+    //     const files = stdout.split('\n').slice(1).map(line => line.trim()).filter(Boolean);
+    //     socket.emit('files', { files });
+    //   });
+    // });
+
+    // Relay container output back to client
+    ptyProcess.on('data', (data) => {
+      // console.log('Data received from container:', data);
+      socket.emit('output', { data });
+    });
+
+    // Relay client input into the container
+    socket.on('input', (data) => {
+      console.log('Input received:', data);
+      ptyProcess.write(data);
+    });
+
+
+    // Cleanup on disconnect
+    socket.on('disconnect', async () => {
+      console.log('Client disconnected:', socket.id);
+      ptyProcess.kill();
+      io.sockets.adapter.rooms.get(containerIdOrName)?.delete(socket.id);
+      if (io.sockets.adapter.rooms.get(containerIdOrName)?.size === 0) {
+        console.log("No more clients in the room, stopping container");
+        try {
+          await container.stop();
+          console.log(`Container ${containerIdOrName} stopped.`);
+        } catch (stopErr) {
+          console.error(`Failed to stop container ${containerIdOrName}:`, stopErr);
+        }
+      }
+    });
   });
 
-  const installScript = `
-  export DEBIAN_FRONTEND=noninteractive && \
-  apt-get update && \
-  apt-get install -y tzdata python3 gcc && \
-  ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime && \
-  dpkg-reconfigure -f noninteractive tzdata && \
-  echo "✅ Installed python3, gcc, and configured tzdata"
-  `;
+  socket.emit('filesReady', 'files are ready to be read');
 
-  ptyProcess.write(`${installScript}\n`);
+  console.log(`Client connected: ${socket.id}`);
 
-  // Wait for the installation to complete before piping output
-  ptyProcess.on('data', (data) => {
-    socket.emit('output', data);
+  // Relay drawing data to all other clients
+  socket.on('drawing', (data) => {
+    socket.broadcast.emit('drawing', data);
+  });
+  socket.on('undo', (data) => {
+    socket.broadcast.emit('drawing', data);
   });
 
-  // Pipe client input to container
-  socket.on('input', (data) => {
-    ptyProcess.write(data);
-  });
   socket.on('getFiles', (data) => {
-    const cmd = `docker exec ${containerIdOrName} ls -la ${data.path}`;
+    // console.log('getFiles event received:', data);
+    const cmd = `docker exec ${data.id} ls -laR ${data.path}`;
 
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
         return socket.emit('files', { error: stderr });
       }
-      // parse output if needed
       const files = stdout.split('\n').slice(1).map(line => line.trim()).filter(Boolean);
       socket.emit('files', { files });
     });
   });
 
-  socket.on('disconnect', () => {
-    console.log('🔴 Client disconnected:', socket.id);
+  socket.on('openFile', (data) => {
+    console.log('openFile event received:', data);
+    const cmd = `docker exec ${data.id} cat ${data.path}`;
 
-    // Send exit command to gracefully terminate the terminal session
-    ptyProcess.kill();
-
-    // Stop the Docker container when the client disconnects
-    if (container) {
-      try {
-
-        container.stop().then(() => {
-          console.log(`Container ${containerIdOrName} stopped.`);
-        }).catch((err) => {
-          console.log(`Failed to stop container ${containerIdOrName}:`, err);
-        });
-      } catch (error) {
-        console.log(error)
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        return socket.emit('fileContent', { error: stderr });
       }
-    }
-    container.stop();
-    console.log(`👍Container ${containerIdOrName} stopped.`);
+      socket.emit('fileContent', { content: stdout, path: data.path });
+    });
   });
+
+  socket.on('deleteFile', (data) => {
+    console.log('deleteFile event received:', data);
+    const cmd = `docker exec ${data.id} rm -rf ${data.path}`;
+    socket.emit("filesReady", 'files are ready to be read');
+
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        return socket.emit('fileContent', { error: stderr });
+      }
+      socket.emit('fileContent', { content: stdout, path: data.path });
+    });
+  });
+
+
+  socket.on('renameFile', ({ id, path: oldPath, newName }) => {
+    // force POSIX semantics:
+    const dir = path.posix.dirname(oldPath);
+    const newPath = path.posix.join(dir, newName);
+
+    const cmd = `docker exec ${id} mv "${oldPath}" "${newPath}"`;
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) return socket.emit('renameError', { error: stderr });
+      socket.emit("filesReady", 'files are ready to be read');
+      // socket.emit('fileContent', { content: stdout, oldPath, newPath });
+
+      // socket.emit('renameSuccess', { oldPath, newPath });
+    });
+  });
+
+  socket.on('save-file', ({ roomId, path: rawPath, code }) => {
+    console.log('save-file event:', { roomId, rawPath });
+
+    // Force POSIX-style path
+    const filePath = rawPath.replace(/\\/g, '/');
+
+    // Spawn `docker exec -i <roomId> tee <filePath>`
+    const proc = spawn('docker', ['exec', '-i', roomId, 'tee', filePath]);
+
+    // Pipe the code into the container's file
+    proc.stdin.write(code);
+    proc.stdin.end();
+
+    proc.on('error', (err) => {
+      console.error('spawn error:', err);
+      socket.emit('saveError', { error: err.message });
+    });
+
+    proc.on('close', (exitCode) => {
+      if (exitCode === 0) {
+        console.log(`Saved ${filePath} in container ${roomId}`);
+        socket.emit('saveSuccess', { path: filePath });
+      } else {
+        const errMsg = `tee exited with code ${exitCode}`;
+        console.error(errMsg);
+        socket.emit('saveError', { error: errMsg });
+      }
+    });
+  });
+
+
+
+
+  socket.on('join-room', async ({ token, roomId }) => {
+    try {
+      const payload = jwtDecode(token);
+      // const session = await clerkClient.sessions.verifySessionToken(token);
+      const userId = payload.sub;
+      socket.data.userId = userId;
+      socket.join(roomId);
+      console.log(`👤 ${userId} joined room ${roomId}`);
+
+      // Initialize room store
+      if (!rooms[roomId]) rooms[roomId] = {};
+      console.log('Users in room', roomId, io.sockets.adapter.rooms.get(roomId).size);
+
+      // Notify others
+      socket.to(roomId).emit('user-joined', { username: userId });
+    } catch (err) {
+      console.error('🔒 auth failed', err);
+      socket.emit('error', { message: 'authentication_failed' });
+    }
+  });
+
+  socket.on("send_message", (data) => {
+    io.emit("receive_message", data);
+  });
+
+
+  socket.on('code-change', async ({ roomId, path, code, token }) => {
+    // console.log("code-change", roomId, path)
+    if (userList.length === 0) return;
+    const payload = jwtDecode(token);
+    const userId = payload.sub;
+    // console.log("user", userList)
+    const user = userList?.data?.find(user => user?.id === userId)
+    // console.log("userList: ", user.firstName)
+    const userName = user.firstName + " " + user.lastName
+    // console.log("user: ", userName)
+    if (!rooms[roomId]) rooms[roomId] = {};
+    rooms[roomId][path] = code;
+    socket.to(roomId).emit('code-change', { path, code, userId: userId });
+  });
+
+
+  socket.on('cursor-change', async ({ roomId, path, position, token }) => {
+    console.log("cursor-change", position, roomId)
+    if (!token) {
+      socket.to(roomId).emit('cursor-change', { path, position, username: roomId });
+      return
+    }
+    console.log(token)
+    // const username = socket.data.userId;
+    const payload = jwtDecode(token);
+    const userId = payload.sub;
+    const userList = await clerkClient.users.getUserList()
+    // console.log("user", us?erList)
+    const user = userList?.data?.find(user => user?.id === userId)
+    // console.log("userList: ", user.firstName)
+    const userName = user.firstName + " " + user.lastName
+    console.log("user: ", userName)
+    socket.to(roomId).emit('cursor-change', { path, position, username: userName });
+  });
+
 });
 
-// **Only one** listen call—handles both HTTP and WebSocket on port 4000
-const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server listening on http://localhost:${PORT}`);
+server.listen(4000, () => {
+  console.log('🚀 Server is running on port 5000');
 });
 
-
-
-
-
-// app.post("/authenticate", async (req, res) => {
-//   const code = req.body.code;
-//   try {
-//     const response = await axios.post(
-//       "https://github.com/login/oauth/access_token",
-//       {
-//         client_id: CLIENT_ID,
-//         client_secret: CLIENT_SECRET,
-//         code,
-//       },
-//       {
-//         headers: { Accept: "application/json" },
-//       }
-//     );
-
-//     const accessToken = response.data.access_token;
-//     res.json({ access_token: accessToken });
-//   } catch (error) {
-//     console.error("Error authenticating with GitHub:", error.message);
-//     res.status(500).json({ error: "Failed to authenticate" });
-//   }
-// });
-
-// // Endpoint to handle code execution
-// // app.post('/run-code', (req, res) => {
-// //   const { language, code } = req.body;
-
-// //   // Basic validation and sanitation
-// //   if (!language || !code) {
-// //     return res.status(400).json({ error: 'Language and code are required' });
-// //   }
-
-// //   // Depending on language, prepare the docker command.
-// //   // Example: running Python code in a Python Docker image.
-// //   let dockerImage;
-// //   let command;
-
-// //   switch (language) {
-// //     case 'python':
-// //       // dockerImage = 'python:3.9-alpine'; // lightweight Alpine image
-// //       dockerImage = 'python-3.14-slim'; // lightweight Alpine image
-// //       // Create a shell command to execute code. We echo code into a file and then run it.
-// //       command = `docker run --rm ${dockerImage} sh -c "echo '${code.replace(/"/g, '\\"')}' > script.py && python script.py"`;
-// //       break;
-// //     // Add other languages (node, ruby, etc.) as needed
-// //     default:
-// //       return res.status(400).json({ error: 'Unsupported language' });
-// //   }
-
-// //   exec(command, { timeout: 5000 }, (error, stdout, stderr) => {
-// //     if (error) {
-// //       console.error('Execution error:', error);
-// //       return res.status(500).json({ error: stderr || error.message });
-// //     }
-// //     return res.json({ output: stdout, error: stderr });
-// //   });
-// // });
-
-// app.get("/download/:user/:repo", async (req, res) => {
-//   const { user, repo } = req.params;
-//   const token = req.headers.authorization;
-//   console.log(user, repo)
-//   try {
-//     const githubResponse = await axios.get(
-//       `https://api.github.com/repos/${user}/${repo}/zipball/main`,
-//       {
-//         headers: {
-//           Authorization: token,
-//           Accept: "application/vnd.github+json",
-//           "X-GitHub-Api-Version": "2022-11-28",
-//         },
-//         responseType: "stream",
-//       }
-//     );
-
-//     res.setHeader("Content-Disposition", `attachment; filename=${repo}.zip`);
-//     githubResponse.data.pipe(res);
-//   } catch (error) {
-//     console.error("Error downloading repository zip:", error.message);
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// server.js
