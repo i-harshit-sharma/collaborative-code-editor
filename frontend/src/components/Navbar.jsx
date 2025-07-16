@@ -93,7 +93,7 @@ function getTimeAgo(date) {
 }
 
 
-const SearchResults = ({ icon, title, description, lnk}) => {
+const SearchResults = ({ icon, title, description, lnk }) => {
     return (
         <Link to={lnk} className='group flex flex-start hover:bg-dark-2 py-1.5 items-center gap-2 px-2 border-t-2 border-t-dark-2/40 cursor-pointer w-full'>
             <div className='flex min-w-fit justify-center items-center bg-dark-2 group-hover:bg-[#063b72] px-2 py-1 rounded gap-1 transition-colors'>
@@ -115,9 +115,9 @@ const Navbar = ({
     const SearchInput = useRef(null);
     const [notifications, setNotifications] = useState(notificationsArray);
     const [data, setData] = useState([]);
-    const {getToken} = useAuth();
+    const { getToken } = useAuth();
     const containerRef = useRef(null);
-  
+
 
     useEffect(() => {
         const get = async () => {
@@ -156,14 +156,14 @@ const Navbar = ({
 
     useEffect(() => {
         const onClick = e => {
-          if (containerRef.current && !containerRef.current.contains(e.target)) {
-            setOpen(false);
-          }
+            if (containerRef.current && !containerRef.current.contains(e.target)) {
+                setOpen(false);
+            }
         };
         document.addEventListener('mousedown', onClick);
         return () => document.removeEventListener('mousedown', onClick);
-      }, []);
-    
+    }, []);
+
 
     const handleNotifications = (index) => {
         const newNotifications = [...notifications];
@@ -193,18 +193,18 @@ const Navbar = ({
     return (
         <div className='relative h-12 border-b-1 border-b-dark-2 top-0 w-full flex justify-between items-center pr-4 '>
             <div className='h-full flex items-center gap-2 cursor-pointer'>
-                <OrgDropDown  isOpen={isOpen}/>
-                {isOpen ?
-                    <PanelLeftClose size={28} className="p-1.5 hover:bg-dark-1 rounded"  onClick={toggleNavbar} /> :
-                    <PanelLeftOpen  size={28} className="p-1.5 hover:bg-dark-1 rounded"  onClick={toggleNavbar}/>
-                }
+                {/* <OrgDropDown isOpen={isOpen} /> */}
+                {/* {isOpen ?
+                    <PanelLeftClose size={28} className="p-1.5 hover:bg-dark-1 rounded" onClick={toggleNavbar} /> :
+                    <PanelLeftOpen size={28} className="p-1.5 hover:bg-dark-1 rounded" onClick={toggleNavbar} />
+                } */}
                 <p className='text-xl font-bold ml-2'>Code Collab</p>
             </div>
-            <div className=' border-1 border-dark-2 absolute top-2 left-1/2 transform -translate-x-1/2 bg-dark-4 rounded-sm lg:w-[530px] flex flex-col' 
+            <div className=' border-1 border-dark-2 absolute top-2 left-1/2 transform -translate-x-1/2 bg-dark-4 rounded-sm lg:w-[530px] flex flex-col'
                 ref={containerRef}>
                 <div className='flex items-center gap-2 w-full h-full px-2'>
                     <Search size={20} />
-                    <input type="text" ref={SearchInput} className='w-full h-full bg-transparent border-none outline-none text-gray-300 placeholder:text-gray-300 text-sm hover:text-gray-50' placeholder='Search...' onChange={(e) => setQuery(e.target.value)} value={query} onFocus={() => setOpen(true)} 
+                    <input type="text" ref={SearchInput} className='w-full h-full bg-transparent border-none outline-none text-gray-300 placeholder:text-gray-300 text-sm hover:text-gray-50' placeholder='Search...' onChange={(e) => setQuery(e.target.value)} value={query} onFocus={() => setOpen(true)}
                     />
                     <div className='p-1'>
                         <span className='border-1 text-sm border-dark-2 px-1 rounded'>Ctrl</span>
@@ -214,19 +214,19 @@ const Navbar = ({
                 </div>
                 {/* Dropdown for search results */}
                 {open && <ul>
-                    <SearchResults icon={<Plus size={16} />} title="New" description="Create a New App" lnk={`http://localhost:5173/new`}/>
-                    <SearchResults icon={<Folder size={16} />} title="My Apps" description="Search your Apps" lnk={`http://localhost:5173/apps`}/>
+                    <SearchResults icon={<Plus size={16} />} title="New" description="Create a New App" lnk={`http://localhost:5173/new`} />
+                    <SearchResults icon={<Folder size={16} />} title="My Apps" description="Search your Apps" lnk={`http://localhost:5173/apps`} />
                 </ul>}
                 {/* {query} */}
                 {open && !!query.length && <ul className='cursor-pointer'>
                     {filtered.map((item, i) => (
-                        <SearchResults key={i} icon={<RenderSign language={item.language} />} title={item.repoName} description={getTimeAgo(item.createdAt)} lnk={`http://localhost:5173/editor/${item.vmId}`}/>
+                        <SearchResults key={i} icon={<RenderSign language={item.language} />} title={item.repoName} description={getTimeAgo(item.createdAt)} lnk={`http://localhost:5173/editor/${item.vmId}`} />
                     ))}
                 </ul>}
             </div>
 
             <div className='h-6 flex gap-2 items-center'>
-                {/*<NotificationDropDown notifications={notifications} setNotifications={handleNotifications} />*/}
+                {/* <NotificationDropDown notifications={notifications} setNotifications={handleNotifications} /> */}
                 <div className='p-1.5 hover:bg-dark-1 rounded cursor-pointer'>
                     {/* <HelpDropDown /> */}
                 </div>

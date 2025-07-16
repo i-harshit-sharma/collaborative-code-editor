@@ -276,7 +276,7 @@ const New = () => {
         <div className='mt-10 border-b-1 border-dark-1 flex'>
           {/* <div className={`cursor-pointer p-2 rounded ${selected === 'ai' ? 'bg-dark-2' : ''}`} onClick={() => setselected('ai')}>Create using AI</div> */}
           <div className={`cursor-pointer p-2 rounded ${selected === 'template' ? 'bg-dark-2' : ''}`} onClick={() => setselected('template')}>Create using template</div>
-          <div className={`cursor-pointer p-2 rounded ${selected === 'github' ? 'bg-dark-2' : ''}`} onClick={() => setselected('github')}>Import from Github</div>
+          {/* <div className={`cursor-pointer p-2 rounded ${selected === 'github' ? 'bg-dark-2' : ''}`} onClick={() => setselected('github')}>Import from Github</div> */}
         </div>
         {selected === 'ai' && (
           <div className='mt-2'>

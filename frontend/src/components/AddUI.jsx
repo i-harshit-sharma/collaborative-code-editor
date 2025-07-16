@@ -3,15 +3,15 @@ import Navbar from './Navbar'
 import Sidebar from './Sidebar'
 
 const AddUI = ({ children }) => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  // const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
   return (
     <div className='h-screen w-full'>
       <Navbar isOpen={false} 
-      toggleNavbar={() => setIsSidebarOpen((prev) => !prev)} 
+      // toggleNavbar={() => setIsSidebarOpen((prev) => !prev)} 
       />
       <div className='flex h-[calc(100%-48px)] w-full'>
-        <Sidebar isOpen={isSidebarOpen} />
+        {/* <Sidebar isOpen={isSidebarOpen} /> */}
         {children}
       </div>
     </div>

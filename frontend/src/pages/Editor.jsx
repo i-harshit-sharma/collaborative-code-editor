@@ -446,13 +446,13 @@ const Editor = () => {
     const sidebarIcons = [
         { icon: <Files />, name: "explorer" },
         { icon: <Search />, name: "search" },
-        { icon: <GitPullRequest />, name: "git" },
+        // { icon: <GitPullRequest />, name: "git" },
         { icon: <Share2 />, name: "share" },
         // { icon: <Phone />, name: "call" },
         { icon: <MessageCircle />, name: "chat" },
         { icon: <Pen />, name: "draw" },
-        {icon: <ArrowUpFromLine />, name: "upload"},
-        {icon: <ArrowDownToLine />, name: "download"},
+        // {icon: <ArrowUpFromLine />, name: "upload"},
+        // {icon: <ArrowDownToLine />, name: "download"},
     ];
     return (
         <div className='w-screen h-screen flex overflow-hidden'>
@@ -482,7 +482,7 @@ const Editor = () => {
                     <SignedIn>
                         <UserButton />
                     </SignedIn>
-                    <Settings />
+                    {/* <Settings /> */}
                 </div>
             </div>
 

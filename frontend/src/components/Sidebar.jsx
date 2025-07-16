@@ -7,9 +7,9 @@ const Sidebar = ({ isOpen }) => {
     <>
       {isOpen ? (
         <div className=' overflow-y-scroll no-scrollbar'>
-        <div className='w-50 border-r-1 border-dark-2 flex flex-col relative left-0 group h-full'>
-          <div className='border-b-1 border-b-dark-1 text-gray-300 group-hover:text-white'>
-            <Link to="/new" className="flex items-center gap-2 justify-center py-1.5 cursor-pointer select-none rounded text-sm m-2 border-1 border-dark-1 hover:bg-dark-2">
+        <div className='w-60 border-r-1 border-dark-2 flex flex-col relative left-0 group h-full'>
+          <div className=' border-b-1 border-b-dark-1 text-gray-300 group-hover:text-white'>
+            <Link to="/new" className="w- flex items-center gap-2 justify-center py-1.5 cursor-pointer select-none rounded text-sm m-2 border-1 border-dark-1 hover:bg-dark-2">
               <Plus size={16} />
               Create App
             </Link>
