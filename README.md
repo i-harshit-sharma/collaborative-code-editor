@@ -4,3 +4,6 @@ user Flow Diagram
 
 ER Diagram
 ![ER Diagram](/SDD.jpg)
+
+Sequence Diagram
+![Component Diagram](/SDD(1).png)
