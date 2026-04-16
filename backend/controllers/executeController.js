@@ -7,7 +7,7 @@ export const executeCode = async (req, res) => {
 
   const specs = {
     python: {
-      image: 'python:3.9-slim',
+      image: 'code-collab-python-executor',
       cmd: ['python3', '-c', sourceCode],
       timeout: 30000,
       memory: 128 * 1024 * 1024
@@ -25,13 +25,13 @@ export const executeCode = async (req, res) => {
       memory: 256 * 1024 * 1024
     },
     cpp: {
-      image: 'gcc:latest',
+      image: 'code-collab-cpp-executor',
       cmd: ['bash', '-c', `echo "${encodedCode}" | base64 -d > main.cpp && g++ main.cpp -o main && ./main`],
       timeout: 30000,
       memory: 256 * 1024 * 1024
     },
     java: {
-      image: 'eclipse-temurin:17-jdk',
+      image: 'code-collab-java-executor',
       cmd: ['bash', '-c', `echo "${encodedCode}" | base64 -d > HelloWorld.java && javac HelloWorld.java && java HelloWorld`],
       timeout: 30000,
       memory: 512 * 1024 * 1024

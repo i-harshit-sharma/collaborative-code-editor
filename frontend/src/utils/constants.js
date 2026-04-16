@@ -5,6 +5,14 @@ const frameworks = [
     { value: "typescript", label: "Typescript", language: "Typescript", description: "Online Typescript Editor and IDE: compile, run, and host Typescript apps", tag: "language" },
     { value: "cpp", label: "C++", language: "C++", description: "Online C++ Editor and IDE: compile, run, and host C++ apps", tag: "language" },
     { value: "java", label: "Java", language: "Java", description: "Online Java Editor and IDE: compile, run, and host Java apps", tag: "language" },
+    { value: "flask", label: "Flask", language: "Python", description: "Lightweight Python web framework template", tag: "websites" },
+    { value: "fastapi", label: "FastAPI", language: "Python", description: "Modern, high-performance Python web framework", tag: "websites" },
+    { value: "django", label: "Django", language: "Python", description: "Full-featured Python web framework", tag: "websites" },
+    { value: "express", label: "Express", language: "Javascript", description: "Standard Node.js web framework", tag: "websites" },
+    { value: "react-vite", label: "React (Vite)", language: "Javascript", description: "Modern frontend development with Vite", tag: "websites" },
+    { value: "spring-boot", label: "Spring Boot", language: "Java", description: "Enterprise Java framework", tag: "websites" },
+    { value: "cpp-cmake", label: "C++ (CMake)", language: "C++", description: "Structured C++ project with CMake", tag: "language" },
+    { value: "bare", label: "Bare Machine", language: "Ubuntu", description: "Minimal Ubuntu environment with basic build tools", tag: "language" },
 ]
 
 const LANGUAGE_VERSIONS = {
