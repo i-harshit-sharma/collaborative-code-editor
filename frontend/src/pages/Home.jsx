@@ -1,6 +1,6 @@
 import React, { use, useEffect, useState } from 'react'
 import TextArea from './TextArea';
-import ProjectList from '../components/ProjectList';
+import ProjectList from '../components/features/dashboard/ProjectList';
 import { ArrowRight } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react'
 import axios from 'axios';

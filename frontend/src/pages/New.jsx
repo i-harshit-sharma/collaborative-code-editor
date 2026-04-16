@@ -1,17 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react'
 import TextArea from './TextArea'
-import { ArrowDownToLine, Check, ChevronDown, GitFork, Github, Globe, Link, Lock, Plus, SquareArrowOutUpRight, Star } from 'lucide-react'
+import { ArrowDownToLine, Check, ChevronDown, GitFork, Github, Globe, Link, Lock, Plus, RefreshCw, SquareArrowOutUpRight, Star } from 'lucide-react'
 import RenderSign from '../utils/RenderSign.jsx'
 import { FaGithub } from "react-icons/fa";
 import { frameworks } from '../utils/constants.js'
 import { useAuth } from '@clerk/clerk-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-// import Videocall from '../components/Videocall.jsx';
+// import Videocall from '../components/features/collaboration/Videocall.jsx';
 
 
-async function fetchRandomWord() {
-  const response = await fetch("https://random-word-api.vercel.app/api?words=3");
+async function fetchRandomWord(signal) {
+  const response = await fetch("https://random-word-api.herokuapp.com/word?diff=2&number=3", { signal });
   if (!response.ok) {
     throw new Error("Failed to fetch word");
   }
@@ -19,11 +19,12 @@ async function fetchRandomWord() {
   return data;
 }
 
-async function generateRandomName() {
+async function generateRandomName(signal) {
   try {
-    const words = await fetchRandomWord()
+    const words = await fetchRandomWord(signal)
     return words.join("_");
   } catch (error) {
+    if (error.name === 'AbortError') throw error;
     console.error("Error generating random name: ", error);
     return "";
   }
@@ -34,6 +35,7 @@ export function Combobox({ onChange, def, disabled = false }) {
   const [value, setValue] = useState(def ? def : "")
   const [search, setSearch] = useState("")
   const popoverRef = useRef(null)
+  const inputRef = useRef(null)
 
   const toggleDropdown = () => setOpen((prev) => !prev)
 
@@ -59,6 +61,12 @@ export function Combobox({ onChange, def, disabled = false }) {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    if (open && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [open])
+
   return (
     <div className="relative w-full bg-dark-4 mt-2" ref={popoverRef}>
       <button
@@ -76,11 +84,12 @@ export function Combobox({ onChange, def, disabled = false }) {
         <div className="absolute z-10 mt-1 w-full border  border-dark-1 rounded shadow bg-dark-4">
           <div className="p-2">
             <input
+              ref={inputRef}
               type="text"
               placeholder="Search framework..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full border px-2 py-1 rounded border-dark-1"
+              className="w-full border px-2 py-1 rounded border-dark-1 bg-dark-4 outline-none "
             />
           </div>
           <div className="max-h-60 overflow-y-auto no-scrollbar bg-dark-4">
@@ -118,15 +127,13 @@ export function Combobox({ onChange, def, disabled = false }) {
 const GithubPublicRepo = () => {
   const { getToken } = useAuth()
   const handleClone = async ({ url }) => {
-    // setStatus("Cloning…");
     try {
-      const res = await fetch("http://localhost:4000/api/clone", {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/clone`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${await getToken()}`,
         },
-
         body: JSON.stringify({ url, repoName: "DefaultRepoName" }),
       });
       const { message, error } = await res.json();
@@ -136,7 +143,6 @@ const GithubPublicRepo = () => {
         // setStatus(`Error: ${error}`);
       }
     } catch (err) {
-      // setStatus("Network error");
       console.error(err);
     }
   };
@@ -223,6 +229,8 @@ const New = () => {
   const [name, setName] = useState("");
   const [github, setGithub] = useState("url");
   const [status, setStatus] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false);
+  const abortControllerRef = useRef(null);
 
   const [selectedOption, setSelectedOption] = useState("public");
   const [isTemporary, setIsTemporary] = useState(false);
@@ -230,11 +238,20 @@ const New = () => {
   const navigate = useNavigate()
 
   const handleSend = async () => {
+    if (!name.trim()) {
+      setStatus("Please enter an app title");
+      return;
+    }
+    if (!selectedTemplate) {
+      setStatus("Please select a template");
+      return;
+    }
+
     try {
       const get = async () => {
-        const token = await getToken()
-        console.log(selectedTemplate)
-        const repos = await axios.post("http://localhost:4000/protected/create-repo",
+        const token = await getToken();
+        setStatus("Creating repository...");
+        const repos = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/protected/create-repo`,
           { repoName: name, language: selectedTemplate, type: selectedOption },
           {
             headers: {
@@ -243,13 +260,12 @@ const New = () => {
             },
             withCredentials: true,
           })
-        // console.log(repos.data)
         navigate('/editor/' + repos.data.user.repos.filter(r => r.repoName === name)[0].vmId)
       }
       get();
     } catch (error) {
       console.error(error);
-
+      setStatus("Failed to create repository");
     }
   };
 
@@ -258,8 +274,30 @@ const New = () => {
   };
 
   const handleGenerate = async () => {
-    const randomName = await generateRandomName();
-    setName(randomName);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
+    setIsGenerating(true);
+    try {
+      const randomName = await generateRandomName(abortControllerRef.current.signal);
+      setName(randomName);
+      setIsGenerating(false);
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error(error);
+        setIsGenerating(false);
+      }
+    }
+  };
+
+  const handleInputChange = (e) => {
+    if (isGenerating && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setIsGenerating(false);
+    }
+    setName(e.target.value);
   };
   useEffect(() => {
     handleGenerate()
@@ -274,9 +312,9 @@ const New = () => {
       <section className='mx-48 my-20 '>
         <h1 className='text-2xl font-bold'>Create a new App</h1>
         <div className='mt-10 border-b-1 border-dark-1 flex'>
-          {/* <div className={`cursor-pointer p-2 rounded ${selected === 'ai' ? 'bg-dark-2' : ''}`} onClick={() => setselected('ai')}>Create using AI</div> */}
+          <div className={`cursor-pointer p-2 rounded ${selected === 'ai' ? 'bg-dark-2' : ''}`} onClick={() => setselected('ai')}>Create using AI</div>
           <div className={`cursor-pointer p-2 rounded ${selected === 'template' ? 'bg-dark-2' : ''}`} onClick={() => setselected('template')}>Create using template</div>
-          {/* <div className={`cursor-pointer p-2 rounded ${selected === 'github' ? 'bg-dark-2' : ''}`} onClick={() => setselected('github')}>Import from Github</div> */}
+          <div className={`cursor-pointer p-2 rounded ${selected === 'github' ? 'bg-dark-2' : ''}`} onClick={() => setselected('github')}>Import from Github</div>
         </div>
         {selected === 'ai' && (
           <div className='mt-2'>
@@ -310,7 +348,22 @@ const New = () => {
             </div>
             <div className=' flex-1/2'>
               <div className='text-sm '>Title</div>
-              <input className='w-full bg-dark-4 mt-2 p-1 rounded border border-dark-1 focus-visible:ring-0 focus-visible:outline-1 outline-blue-1' value={name} onChange={(e) => setName(e.target.value)} />
+              <div className='relative flex items-center'>
+                <input
+                  className='w-full bg-dark-4 mt-2 p-1 pr-8 rounded border border-dark-1 focus-visible:ring-0 focus-visible:outline-1 outline-blue-1'
+                  value={name}
+                  onChange={handleInputChange}
+                  placeholder={isGenerating ? "Generating..." : "Enter app title"}
+                />
+                <button
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  className={`absolute right-2 top-4 text-gray-400 hover:text-white transition-colors cursor-pointer ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title="Generate random title"
+                >
+                  <RefreshCw size={14} className={isGenerating ? 'animate-spin' : ''} />
+                </button>
+              </div>
               <div className="mt-2 text-sm">Privacy</div>
 
               <div className="flex flex- gap-12 mt-2">
@@ -325,7 +378,7 @@ const New = () => {
                   />
                   <div className='flex gap-2 items-center'>Public<Globe size={18} /></div>
                 </label>
-                {/* <div className='text-sm'>Anyone can view and fork this App.</div> */}
+                <div className='text-sm'>Anyone can view and fork this App.</div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
@@ -337,11 +390,11 @@ const New = () => {
                   />
                   <div className='flex gap-2 items-center'>Private <Lock size={18} /></div>
                 </label>
-                {/* <div className='text-sm'>Only you can see and edit this App.</div> */}
+                <div className='text-sm'>Only you can see and edit this App.</div>
               </div>
               <div className='flex gap-2 items-center mt-4'>
-                {/* <input type="checkbox" className='cursor-pointer h-4.5 w-4.5' id='isTemp' checked={isTemporary} onChange={() => { setIsTemporary(!isTemporary) }} /> */}
-                {/* <label htmlFor="isTemp" className='select-none cursor-pointer'>Make Repository Permanent</label> */}
+                <input type="checkbox" className='cursor-pointer h-4.5 w-4.5' id='isTemp' checked={isTemporary} onChange={() => { setIsTemporary(!isTemporary) }} />
+                <label htmlFor="isTemp" className='select-none cursor-pointer'>Make Repository Permanent</label>
               </div>
               <div className='bg-blue-1 px-2 py-1 mt-7.5 flex items-center justify-center gap-2 rounded ' onClick={handleSend}>
                 <Plus />
@@ -388,7 +441,7 @@ const New = () => {
                 />
                 <div className='flex gap-2 items-center'>Public<Globe size={18} /></div>
               </label>
-              {/* <div className='text-sm'>Anyone can view and fork this App.</div> */}
+              <div className='text-sm'>Anyone can view and fork this App.</div>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -400,7 +453,7 @@ const New = () => {
                 />
                 <div className='flex gap-2 items-center'>Private <Lock size={18} /></div>
               </label>
-              {/* <div className='text-sm'>Only you can see and edit this App.</div> */}
+              <div className='text-sm'>Only you can see and edit this App.</div>
             </div>
             <div className='flex items-center justify-between mt-4'>
               <div className='flex gap-2 items-center '>

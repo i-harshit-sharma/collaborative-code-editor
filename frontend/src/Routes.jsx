@@ -1,5 +1,7 @@
-import { createBrowserRouter, Link, Outlet, useParams } from "react-router-dom";
-import React, { useEffect, useState } from "react";
+import { createBrowserRouter } from "react-router-dom";
+import React from "react";
+
+// Pages
 import Apps from "./pages/Apps.jsx";
 import New from "./pages/New.jsx";
 import Deployments from "./pages/Deployments.jsx";
@@ -8,91 +10,18 @@ import Teams from "./pages/Teams.jsx";
 import Usage from "./pages/Usage.jsx";
 import SignIn from "./pages/signIn.jsx";
 import SignUp from "./pages/signUp.jsx";
-import AddUI from "./components/AddUI.jsx";
 import About from "./pages/About.jsx";
 import Working from "./pages/Working.jsx";
 import Landing from "./pages/Landing.jsx";
 import Try from "./pages/Try.jsx";
 import Editor from "./pages/Editor.jsx";
-import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
-import { useAuth } from "@clerk/clerk-react";
-import axios from "axios";
 import Test from "./pages/Test.jsx";
 import TestEditor from "./pages/TestEditor.jsx";
 
-// Layout wrapper for protected routes
-const AddUILayout = () => (
-  <AddUI>
-    <Outlet />
-  </AddUI>
-);
-
-// Standard protected route: requires authentication
-const ProtectedRoute = ({ children }) => (
-  <>
-    <SignedIn>{children}</SignedIn>
-    <SignedOut>
-      <RedirectToSignIn />
-    </SignedOut>
-  </>
-);
-
-// Conditionally protect Editor: check `hasPermission` before rendering
-const ConditionallyProtect = ({ children }) => {
-  const { id } = useParams();
-  const { isSignedIn, getToken } = useAuth();
-
-  const [hasPermission, setHasPermission] = useState(null); // null = loading, true/false = result
-
-  useEffect(() => {
-    const fetchPermission = async () => {
-      try {
-        const token = await getToken();
-        const response = await axios.get(
-          `http://localhost:4000/protected/check-repo/${id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            withCredentials: true,
-          }
-        );
-        setHasPermission(response.data.message === "User has access");
-      } catch (err) {
-        console.error("Permission check failed:", err);
-        setHasPermission(false);
-      }
-    };
-
-    if (isSignedIn) {
-      fetchPermission();
-    }
-  }, [id, isSignedIn, getToken]);
-
-  if (!isSignedIn) {
-    return <SignIn />;
-  }
-
-  if (hasPermission === null) {
-    return <div>Checking permissions...</div>;
-  }
-
-  if (!hasPermission) {
-    return (
-      <div>
-        You currently do not have permission to access this path. Recheck the
-        URL or try again.
-      </div>
-    );
-  }
-
-  return <SignedIn>{children}</SignedIn>;
-};
-
-const Login = () => {
-  return <div>Please <Link to="/sign-in">log in</Link> to access this content.</div>;
-};
+// Auth & Layout
+import MainLayout from "./components/layout/MainLayout";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import ConditionallyProtect from "./components/auth/ConditionallyProtect";
 
 // Router configuration
 const routes = createBrowserRouter([
@@ -104,7 +33,7 @@ const routes = createBrowserRouter([
     path: "/",
     element: (
       <ProtectedRoute>
-        <AddUILayout />
+        <MainLayout />
       </ProtectedRoute>
     ),
     children: [
@@ -154,7 +83,7 @@ const routes = createBrowserRouter([
   },
   {
     path: "*",
-    element: <div>404 Not Found</div>,
+    element: <div className="flex items-center justify-center min-h-screen text-2xl font-bold">404 Not Found</div>,
   },
 ]);
 

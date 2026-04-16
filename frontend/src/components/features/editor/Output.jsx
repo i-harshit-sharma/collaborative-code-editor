@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { executeCode } from "./api";
+import { executeCode } from "../../../api/repos";
 
 const Output = ({ editorRef, language }) => {
   const [output, setOutput] = useState(null);

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
-import RenderSign from '../utils/RenderSign'
+import RenderSign from '../../../utils/RenderSign'
 import { ChevronDown, Earth, EllipsisVertical, Globe, Link2, Lock, LockKeyhole, Pen, Share2, Trash2, X } from 'lucide-react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuTrigger, } from '../components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuTrigger, } from '../../ui/dropdown-menu'
 import { useAuth } from '@clerk/clerk-react';
 import axios from 'axios';
 import { Dialog } from "radix-ui";
 import { Cross2Icon } from "@radix-ui/react-icons";
-import { frameworks } from '../utils/constants'
-import { Combobox } from '../pages/New'
+import { frameworks } from '../../../utils/constants'
+import { Combobox } from '../../../pages/New'
 import { Select } from "radix-ui";
 import { Link } from 'react-router-dom'
 import {

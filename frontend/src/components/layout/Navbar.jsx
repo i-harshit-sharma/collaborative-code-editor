@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { HelpDropDown, NotificationDropDown, OrgDropDown } from './OrgDropDown'
 import { Folder, PanelLeftClose, PanelLeftOpen, Plus, Search } from 'lucide-react'
-import RenderSign from '../utils/RenderSign';
+import RenderSign from '../../utils/RenderSign';
 import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/clerk-react'
 import { UserButton } from '@clerk/clerk-react'
 import { Link, useParams } from 'react-router-dom';

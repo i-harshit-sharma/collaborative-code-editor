@@ -1,5 +1,5 @@
 import React from 'react'
-import ProjectList from '../components/ProjectList'
+import ProjectList from '../components/features/dashboard/ProjectList'
 
 const Apps = () => {
   return (

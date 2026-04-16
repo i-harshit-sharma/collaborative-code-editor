@@ -8,13 +8,13 @@ import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { io } from 'socket.io-client';
 import { useAuth } from '@clerk/clerk-react';
-import FileExplorer from '../components/FileExplorer';
-import EditorContainer from '../components/EditorContainer';
-import TerminalPane from '../components/TerminalPane';
-import Whiteboard from '../components/Whiteboard';
-import Chat from '../components/Chat';
-import SearchL from '../components/Search';
-import Share from '../components/Share';
+import FileExplorer from '../components/features/editor/FileExplorer';
+import EditorContainer from '../components/features/editor/EditorContainer';
+import TerminalPane from '../components/features/editor/TerminalPane';
+import Whiteboard from '../components/features/editor/Whiteboard';
+import Chat from '../components/features/chat/Chat';
+import SearchL from '../components/features/dashboard/Search';
+import Share from '../components/features/collaboration/Share';
 import TestEditor from './TestEditor';
 /**
  * Renders a tabbed interface to switch between multiple terminals.

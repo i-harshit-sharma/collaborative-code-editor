@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { LANGUAGE_VERSIONS } from "../utils/constants";
+import { LANGUAGE_VERSIONS } from "../../../utils/constants";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Code2, Check, Info } from "lucide-react";
 import {

@@ -26,8 +26,6 @@ import {
       userData: { id: userId },
     });
 
-    const chatClient = client.client;
-  
     if (!client) return <div>Loading...</div>;
   
     return (

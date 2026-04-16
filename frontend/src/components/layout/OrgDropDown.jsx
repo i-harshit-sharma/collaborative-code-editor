@@ -1,5 +1,5 @@
 import { ArrowRight, BellDot, Book, ChevronDown, FileQuestion, FunnelX, Globe, MessageCircleQuestion } from "lucide-react"
-import { Button } from "../components/ui/button"
+import { Button } from "../ui/button"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -14,7 +14,7 @@ import {
     DropdownMenuSubContent,
     DropdownMenuSubTrigger,
     DropdownMenuTrigger,
-} from "../components/ui/dropdown-menu"
+} from "../ui/dropdown-menu"
 import { Link } from "react-router-dom"
 import { useState } from "react"
 // import { DropdownMenuCheckboxItem } from "@radix-ui/react-dropdown-menu"
