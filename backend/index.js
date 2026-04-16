@@ -19,6 +19,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
+import { PassThrough } from 'stream';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -90,6 +91,127 @@ startServer();
 
 app.use('/protected', clerkMiddleware());
 
+app.post('/api/execute', async (req, res) => {
+  const { language, sourceCode } = req.body;
+  // Base64 encode the code to completely prevent bash injection in CLI arguments
+  const encodedCode = Buffer.from(sourceCode).toString('base64');
+
+  const specs = {
+    python: {
+      image: 'python:3.9-slim',
+      cmd: ['python3', '-c', sourceCode],
+      timeout: 30000,
+      memory: 128 * 1024 * 1024
+    },
+    javascript: {
+      image: 'code-collab-node-executor',
+      cmd: ['node', '-e', sourceCode],
+      timeout: 30000,
+      memory: 128 * 1024 * 1024
+    },
+    typescript: {
+      image: 'code-collab-node-executor',
+      cmd: ['bash', '-c', `echo "${encodedCode}" | base64 -d > main.ts && tsx main.ts`],
+      timeout: 30000,
+      memory: 256 * 1024 * 1024
+    },
+    cpp: {
+      image: 'gcc:latest',
+      cmd: ['bash', '-c', `echo "${encodedCode}" | base64 -d > main.cpp && g++ main.cpp -o main && ./main`],
+      timeout: 30000,
+      memory: 256 * 1024 * 1024
+    },
+    java: {
+      image: 'eclipse-temurin:17-jdk',
+      cmd: ['bash', '-c', `echo "${encodedCode}" | base64 -d > HelloWorld.java && javac HelloWorld.java && java HelloWorld`],
+      timeout: 30000,
+      memory: 512 * 1024 * 1024
+    }
+  };
+
+  const spec = specs[language];
+  if (!spec) return res.status(400).json({ error: 'Unsupported language' });
+
+  let container;
+  try {
+    container = await docker.createContainer({
+      Image: spec.image,
+      Cmd: spec.cmd,
+      Tty: false,
+      HostConfig: {
+        AutoRemove: true, // Will delete container on natural exit
+        Memory: spec.memory || 128 * 1024 * 1024,
+        NanoCpus: 500000000,
+      },
+    });
+
+    await container.start();
+
+    // 1. Setup proper stream multiplexing using dockerode's built-in demuxer
+    const logStream = await container.logs({
+      stdout: true,
+      stderr: true,
+      follow: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    const stdoutStream = new PassThrough();
+    const stderrStream = new PassThrough();
+
+    stdoutStream.on('data', (chunk) => stdout += chunk.toString('utf8'));
+    stderrStream.on('data', (chunk) => stderr += chunk.toString('utf8'));
+
+    // Demux handles the 8-byte Docker headers safely regardless of chunk size
+    container.modem.demuxStream(logStream, stdoutStream, stderrStream);
+
+    // 2. Implement a safe timeout mechanism (e.g., 5 seconds or language-specific)
+    const timeoutMs = spec.timeout || 5000;
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Execution timed out')), timeoutMs);
+    });
+
+    // Race the container execution against the timeout
+    await Promise.race([
+      container.wait(),
+      timeoutPromise
+    ]);
+
+    res.json({
+      run: {
+        stdout: stdout,
+        stderr: stderr,
+        output: stdout + stderr,
+      }
+    });
+    console.log("Container Destroyed (Natural Exit)");
+
+  } catch (error) {
+    console.error('Execution error:', error.message);
+
+    // 3. Force kill the container if it timed out (AutoRemove doesn't trigger on hangs)
+    if (error.message === 'Execution timed out' && container) {
+      try {
+        await container.kill(); // Force stop; AutoRemove will catch it and delete it
+        console.log("Container Destroyed (Force Killed due to Timeout)");
+      } catch (killError) {
+        // Ignore 404s, which mean the container already finished and was AutoRemoved
+        if (killError.statusCode !== 404) {
+          console.error("Failed to kill container:", killError.message);
+        }
+      }
+    }
+
+    res.status(500).json({
+      run: {
+        stdout: '',
+        stderr: error.message,
+        output: error.message
+      }
+    });
+  }
+});
 app.get('/protected/test', (req, res) => {
   res.send(' Protected Test Successful!');
 });
@@ -694,7 +816,7 @@ io.on('connection', (socket) => {
     }
 
     // Spawn a pty bash session inside the container
-    const ptyProcess = pty.spawn('docker', ['exec', '-it', containerIdOrName, '/bin/bash'], {
+    const ptyProcess = pty.spawn('docker', ['exec', '-u', 'root', '-it', containerIdOrName, '/bin/bash'], {
       name: 'xterm-color',
       cols: 80,
       rows: 12,
@@ -932,7 +1054,8 @@ echo "✅ Installed development tools and configured tzdata"
 
 });
 
-server.listen(4000, () => {
-  console.log('🚀 Server is running on port 5000');
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, () => {
+  console.log(`🚀 Server is running on port ${PORT}`);
 });
 

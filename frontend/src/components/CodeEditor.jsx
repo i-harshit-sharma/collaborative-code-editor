@@ -20,12 +20,16 @@ const CodeEditor = () => {
   };
 
   return (
-    <div className="p-4">
-      <div className="flex space-x-4">
-        <div className="w-1/2 flex flex-col">
+    <div className="p-0 md:p-4">
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="w-full md:w-1/2 flex flex-col">
           <LanguageSelector language={language} onSelect={onSelect} />
           <Editor
-            options={{ minimap: { enabled: true } }}
+            options={{ 
+              minimap: { enabled: false },
+              fontSize: 14,
+              padding: { top: 10 }
+            }}
             height="75vh"
             theme="vs-dark"
             language={language}
@@ -35,7 +39,7 @@ const CodeEditor = () => {
             onChange={(val) => setValue(val)}
           />
         </div>
-        <div className="flex-1">
+        <div className="w-full md:flex-1">
           <Output editorRef={editorRef} language={language} />
         </div>
       </div>

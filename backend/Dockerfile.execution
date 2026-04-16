@@ -1,0 +1,5 @@
+FROM node:24-slim
+RUN npm install -g tsx typescript
+WORKDIR /app
+
+# run command docker build -f backend/Dockerfile.execution -t code-collab-node-executor backend
