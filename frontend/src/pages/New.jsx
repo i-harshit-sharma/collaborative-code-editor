@@ -7,6 +7,8 @@ import { frameworks } from '../utils/constants.js'
 import { useAuth } from '@clerk/clerk-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import Loader from '../components/ui/Loader.jsx';
+import { LANGUAGE_VERSIONS } from '../utils/constants.js'
 // import Videocall from '../components/features/collaboration/Videocall.jsx';
 
 
@@ -102,15 +104,17 @@ export function Combobox({ onChange, def, disabled = false }) {
                 <div
                   key={fw.value}
                   onClick={() => handleSelect(fw.value)}
-                  className={`cursor-pointer px-3 py-2 text-sm flex items-center justify-between hover:bg-dark-1 ${value === fw.value ? "" : ""
-                    }`}
+                  className={`cursor-pointer px-3 py-2.5 text-sm flex items-center justify-between hover:bg-dark-1 transition-colors ${value === fw.value ? "bg-dark-2" : ""}`}
                 >
-                  <div className='flex items-center gap-3 '>
-                    <RenderSign language={fw.value} />
-                    {fw.label}
+                  <div className='flex items-center gap-3'>
+                    <RenderSign language={fw.value} size={20} />
+                    <div className="flex flex-col">
+                      <span className="font-medium">{fw.label}</span>
+                      <span className="text-[10px] text-gray-500 uppercase tracking-wider">{fw.tag}</span>
+                    </div>
                   </div>
-                  <span className={`mr-2 ${value === fw.value ? "opacity-100" : "hidden"}`}>
-                    <Check size={16} />
+                  <span className={`${value === fw.value ? "opacity-100" : "opacity-0"}`}>
+                    <Check size={16} className="text-blue-500" />
                   </span>
                 </div>
               ))
@@ -234,6 +238,7 @@ const New = () => {
 
   const [selectedOption, setSelectedOption] = useState("public");
   const [isTemporary, setIsTemporary] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { getToken } = useAuth()
   const navigate = useNavigate()
 
@@ -247,25 +252,31 @@ const New = () => {
       return;
     }
 
+    setLoading(true);
+    setStatus("Creating repository...");
     try {
-      const get = async () => {
-        const token = await getToken();
-        setStatus("Creating repository...");
-        const repos = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/protected/create-repo`,
-          { repoName: name, language: selectedTemplate, type: selectedOption },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            withCredentials: true,
-          })
-        navigate('/editor/' + repos.data.user.repos.filter(r => r.repoName === name)[0].vmId)
+      const token = await getToken();
+      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/protected/create-repo`,
+        { repoName: name, language: selectedTemplate, type: selectedOption },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          withCredentials: true,
+        });
+
+      const { repo } = response.data;
+      if (repo && repo.vmId) {
+        navigate('/editor/' + repo.vmId);
+      } else {
+        throw new Error("Repository created but vmId not found");
       }
-      get();
     } catch (error) {
       console.error(error);
-      setStatus("Failed to create repository");
+      setStatus("Failed to create repository: " + (error.response?.data?.error || error.message));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -309,6 +320,7 @@ const New = () => {
 
   return (
     <div className='flex-grow h-full overflow-y-scroll no-scrollbar'>
+      {loading && <Loader message="Provisioning your environment..." />}
       <section className='mx-48 my-20 '>
         <h1 className='text-2xl font-bold'>Create a new App</h1>
         <div className='mt-10 border-b-1 border-dark-1 flex'>
@@ -330,20 +342,44 @@ const New = () => {
               <div className='text-sm'>Template</div>
               <Combobox onChange={(e) => setSelectedTemplate(e)} />
               {
-                selectedTemplate && (
-                  <div className='w-full mt-3 p-3 rounded border border-dark-1'>
-                    <div className='flex justify-between items-center'>
-                      <RenderSign language={frameworks.find((fw) => fw.value === selectedTemplate)?.value} size={32} />
-                      <div className='text-xs border-1 border-dark-1 rounded-xl px-2 py-1'>{frameworks.find((fw) => fw.value === selectedTemplate)?.tag}</div>
+                selectedTemplate && (() => {
+                  const template = frameworks.find((fw) => fw.value === selectedTemplate);
+                  const version = LANGUAGE_VERSIONS[template.language.toLowerCase()] || "Latest";
+                  return (
+                    <div className='w-full mt-3 p-4 rounded border border-dark-1 bg-dark-4'>
+                      <div className='flex justify-between items-start mb-4'>
+                        <div className="flex items-center gap-3">
+                          <RenderSign language={template.value} size={32} />
+                          <div className="flex flex-col">
+                            <h3 className="text-md font-semibold text-white">{template.label}</h3>
+                            <div className='text-[10px] w-fit border border-dark-1 rounded-xl px-2 py-0.5 text-gray-400'>
+                              {template.tag}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-4 mb-4">
+                        <div className="flex-1">
+                          <p className="text-[10px] text-gray-500 mb-0.5 uppercase tracking-wider">Language</p>
+                          <div className="flex items-center gap-2">
+                            <RenderSign language={template.language.toLowerCase()} size={14} />
+                            <span className="text-sm">{template.language}</span>
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-[10px] text-gray-500 mb-0.5 uppercase tracking-wider">Version</p>
+                          <span className="text-sm text-blue-400">{version}</span>
+                        </div>
+                      </div>
+
+                      <div className='text-sm text-gray-300'>
+                        <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">Description</p>
+                        {template.description}
+                      </div>
                     </div>
-                    <div>
-                      {frameworks.find((fw) => fw.value === selectedTemplate)?.label}
-                    </div>
-                    <div className='text-sm mt-12'>
-                      {frameworks.find((fw) => fw.value === selectedTemplate)?.description}
-                    </div>
-                  </div>
-                )
+                  );
+                })()
               }
             </div>
             <div className=' flex-1/2'>

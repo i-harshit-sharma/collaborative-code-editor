@@ -68,22 +68,7 @@ export default (io, socket) => {
 
     console.log('🔥 PTY session started for container:', containerIdOrName);
 
-    const installScript = `
-export DEBIAN_FRONTEND=noninteractive && \
-apt-get update && \
-apt-get install -y \
-  gcc make build-essential git curl wget unzip zsh tmux nano neofetch tzdata vim locales && \
-ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime && \
-dpkg-reconfigure --frontend noninteractive tzdata && \
-curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | \
-  tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && \
-echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | \
-  tee /etc/apt/sources.list.d/ngrok.list && \
-apt update && apt install -y ngrok && \
-ngrok config add-authtoken YOUR_NGROK_TOKEN && \
-echo "✅ Installed development tools and configured tzdata"
-`;
-    ptyProcess.write(`${installScript}\n`);
+    console.log('🔥 PTY session started for container:', containerIdOrName);
 
     ptyProcess.on('data', (data) => {
       socket.emit('output', { data });
@@ -93,19 +78,10 @@ echo "✅ Installed development tools and configured tzdata"
       ptyProcess.write(data);
     });
 
-    socket.on('disconnect', async () => {
-      console.log('Client disconnected:', socket.id);
+    socket.on('disconnect', () => {
+      console.log('Client disconnected from terminal:', socket.id);
       ptyProcess.kill();
-      io.sockets.adapter.rooms.get(containerIdOrName)?.delete(socket.id);
-      if (io.sockets.adapter.rooms.get(containerIdOrName)?.size === 0) {
-        console.log("No more clients in the room, stopping container");
-        try {
-          await container.stop();
-          console.log(`Container ${containerIdOrName} stopped.`);
-        } catch (stopErr) {
-          console.error(`Failed to stop container ${containerIdOrName}:`, stopErr);
-        }
-      }
+      // The global 'disconnecting' listener in index.js handles container shutdown
     });
   });
 };

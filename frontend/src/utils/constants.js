@@ -16,11 +16,12 @@ const frameworks = [
 ]
 
 const LANGUAGE_VERSIONS = {
-    javascript: "24.0.0",
-    typescript: "5.4.5",
-    python: "3.9.19",
-    java: "17.0.10",
-    cpp: "14.2.0",
+    javascript: "24.0 (Slim)",
+    typescript: "24.0 (Slim)",
+    python: "3.9 (Slim)",
+    java: "17.0 (Temurin)",
+    cpp: "14.2 (GCC Latest)",
+    ubuntu: "22.04 (LTS)",
 };
 
 const CODE_SNIPPETS = {

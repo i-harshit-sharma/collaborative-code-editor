@@ -57,66 +57,43 @@ const ProjectList = ({ limit, shared = false }) => {
     const deleteRef = useRef(null)
     const [loading, setLoading] = useState(false)
 
+    const apiUrl = import.meta.env.VITE_API_BASE_URL;
+
     useEffect(() => {
         const get = async () => {
-            if (!shared) {
-                try {
-                    const token = await getToken();
-                    const response = await axios.get("http://localhost:4000/protected/get-repos", {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                        },
-                        withCredentials: true,
-                    });
-                    console.log(response.data)
-                    setList(response.data)
-                } catch (error) {
-                    console.error(error);
-                }
-            }else{
-                try {
-                    const token = await getToken();
-                    const response = await axios.get("http://localhost:4000/protected/get-shared-repos", {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                        },
-                        withCredentials: true,
-                    });
-                    console.log(response.data)
-                    setList(response.data)
-                } catch (error) {
-                    console.error(error);
-                }
+            try {
+                const token = await getToken();
+                const endpoint = shared ? "/protected/get-shared-repos" : "/protected/get-repos";
+                const response = await axios.get(`${apiUrl}${endpoint}`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    withCredentials: true,
+                });
+                setList(response.data);
+            } catch (error) {
+                console.error("Error fetching repos:", error);
             }
         }
         get()
-    }, [])
+    }, [shared])
 
     const handleEdit = async (id, obj) => {
         try {
-            const get = async () => {
-                const token = await getToken()
-                const repos = await axios.post("http://localhost:4000/protected/edit-repo",
-                    { id, obj },
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                        },
-                        withCredentials: true,
-                    })
-                console.log(repos.data)
-                setList(repos.data.user.repos)
-                setRepoName('')
-                setLanguage('')
-                setType('')
-            }
-            get();
+            const token = await getToken()
+            const response = await axios.post(`${apiUrl}/protected/edit-repo`,
+                { id, obj },
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    withCredentials: true,
+                })
+            setList(response.data.user.repos)
         } catch (error) {
-            console.error(error);
-
+            console.error("Error editing repo:", error);
         }
         setEdit(null)
     };
@@ -125,7 +102,7 @@ const ProjectList = ({ limit, shared = false }) => {
         try {
 
             const token = await getToken();
-            const response = await axios.get(`http://localhost:4000/protected/get-shared-users/${id}`, {
+            const response = await axios.get(`${apiUrl}/protected/get-shared-users/${id}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
@@ -168,7 +145,7 @@ const ProjectList = ({ limit, shared = false }) => {
         try {
             const get = async () => {
                 const token = await getToken()
-                const repos = await axios.post("http://localhost:4000/protected/share-repo",
+                const response = await axios.post(`${apiUrl}/protected/share-repo`,
                     { id, obj },
                     {
                         headers: {
@@ -177,16 +154,11 @@ const ProjectList = ({ limit, shared = false }) => {
                         },
                         withCredentials: true,
                     })
-                console.log(repos.data)
-                setList(repos.data.user.repos)
-                setRepoName('')
-                setLanguage('')
-                setType('')
+                setList(response.data.user.repos)
             }
             get();
         } catch (error) {
             console.error(error);
-
         }
         setShare(null)
     }
@@ -194,7 +166,7 @@ const ProjectList = ({ limit, shared = false }) => {
     const handleDelete = async (id) => {
         try {
             const token = await getToken()
-            const response = await axios.delete(`http://localhost:4000/protected/delete-repo/${id}`, {
+            await axios.delete(`${apiUrl}/protected/delete-repo/${id}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
@@ -208,48 +180,77 @@ const ProjectList = ({ limit, shared = false }) => {
         finally {
             setDeleteRepo(null)
         }
-
     }
 
     // TODO: get shared users, Add shared users
 
     return (
-        <div className='flex gap-6 my-3 flex-wrap w-full'>
-            {list.length === 0 ? (
-                <div className='text-gray-400 text-center w-full'>No Projects Found</div>
-            ) : (list.slice(0, limit).map((item, index) => {
-                return <div key={index} className='bg-dark-2 p-3 rounded hover:bg-dark-1 cursor-pointer select-none min-w-1/4 flex-1'>
-                    <Link to={`/editor/${item.vmId}`} className='flex gap-2'>
-                        <RenderSign language={item.language} />
-                        <div className='overflow-hidden text-sm'>
-                            {item.repoName}
-                            <div className='text-gray-400'>{getTimeAgo(item.createdAt)}</div>
-                        </div>
-                    </Link>
-                    <div className='flex items-center justify-between mt-2 relative' >
-                        <div className='flex items-center justify-center  gap-2 text-md'>
-                            {item.type === "Public" ? <Globe size={16} /> : <Lock size={16} />}
-                            {item.type}
-                        </div>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <EllipsisVertical size={18} className='hover:bg-dark-2 rounded ' />
-
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="ml-4 w- bg-dark-2 border-dark-3" scrollbar="false" sideOffset={1}>
-                                <DropdownMenuGroup>
-                                    <DropdownMenuItem className="hover:bg-dark-1 cursor-pointer" onClick={() => setEdit(index)}>
-                                        <Pen />
-                                        Edit</DropdownMenuItem>
-                                    <DropdownMenuItem className="hover:bg-dark-1 cursor-pointer" onClick={() => { setShare(index); getSharedUsers(item._id) }}>
-                                        <Share2 />Share</DropdownMenuItem>
-                                    <DropdownMenuItem className="hover:bg-dark-1 cursor-pointer text-[#ff6666]"
-                                        onClick={() => setDeleteRepo(index)}
-                                    ><Trash2 />Delete</DropdownMenuItem>
-                                </DropdownMenuGroup>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+        <>
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 my-6 w-full'>
+                {list.length === 0 ? (
+                    <div className='col-span-full text-gray-500 text-center py-20 bg-dark-3/30 rounded-2xl border-2 border-dashed border-dark-1'>
+                        No Projects Found
                     </div>
+                ) : (list.slice(0, limit).map((item, index) => {
+                    return (
+                        <div key={index} className='group relative flex flex-col bg-dark-3 border border-dark-1 rounded-2xl overflow-hidden hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 transform hover:-translate-y-1'>
+                            {/* Status/Environment Header */}
+                            <div className="absolute top-4 left-4 z-10">
+                                <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-dark-4/60 backdrop-blur-sm border border-dark-1 text-[10px] font-medium uppercase tracking-wider text-gray-400">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                                    Online
+                                </div>
+                            </div>
+
+                            <Link to={`/editor/${item.vmId}`} className='p-6 flex-grow'>
+                                <div className='mb-6 mt-4 flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-dark-2 to-dark-4 border border-dark-1 group-hover:scale-110 transition-transform duration-300'>
+                                    <RenderSign language={item.language} size={40} />
+                                </div>
+
+                                <div className='space-y-1'>
+                                    <h3 className='text-lg font-semibold text-white truncate group-hover:text-blue-400 transition-colors'>
+                                        {item.repoName}
+                                    </h3>
+                                    <div className='flex items-center gap-2 text-xs text-gray-400'>
+                                        <span className="capitalize">{item.language}</span>
+                                        <span>•</span>
+                                        <span>{getTimeAgo(item.createdAt)}</span>
+                                    </div>
+                                </div>
+                            </Link>
+
+                            <div className='px-6 py-4 flex items-center justify-between border-t border-dark-1 bg-dark-4/50'>
+                                <div className='flex items-center gap-2 px-2 py-1 rounded-lg bg-dark-2 border border-dark-1 text-xs text-gray-300'>
+                                    {item.type === "Public" ? <Globe size={14} /> : <Lock size={14} />}
+                                    {item.type}
+                                </div>
+
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button className="p-2 hover:bg-dark-1 rounded-lg transition-colors text-gray-400 hover:text-white outline-none">
+                                            <EllipsisVertical size={20} />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="w-48 bg-dark-4 border-dark-1 p-1 shadow-2xl z-[100]" scrollbar="false" sideOffset={8}>
+                                        <DropdownMenuGroup>
+                                            <DropdownMenuItem className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-dark-1 focus:bg-dark-1 transition-colors text-sm text-gray-200" onClick={() => setEdit(index)}>
+                                                <Pen size={16} /> Edit
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-dark-1 focus:bg-dark-1 transition-colors text-sm text-gray-200" onClick={() => { setShare(index); getSharedUsers(item._id) }}>
+                                                <Share2 size={16} /> Share
+                                            </DropdownMenuItem>
+                                            <div className="h-px bg-dark-1 my-1"></div>
+                                            <DropdownMenuItem className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-red-500/10 focus:bg-red-500/10 transition-colors text-sm text-red-400" onClick={() => setDeleteRepo(index)}>
+                                                <Trash2 size={16} /> Delete
+                                            </DropdownMenuItem>
+                                        </DropdownMenuGroup>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                        </div>
+                    )
+                }))}
+            </div>
                     {edit !== null && (
                         <div className="fixed inset-0 bg-dark-4/25 bg-opacity-40 flex items-center justify-center z-50">
                             <div className="bg-dark-4 rounded-2xl shadow-xl p-6 w-full max-w-md relative">
@@ -504,9 +505,7 @@ const ProjectList = ({ limit, shared = false }) => {
                             </div>
                         </div>
                     )}
-                </div>
-            }))}
-        </div >
+        </>
     )
 }
 

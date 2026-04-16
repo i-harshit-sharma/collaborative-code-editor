@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import { jwtDecode } from 'jwt-decode';
 import { createContainerFromImages } from '../services/dockerService.js';
 import { getSharedUserIdsByVmId } from '../services/repoService.js';
+import { initializeVM } from '../services/containerInitService.js';
 
 export const getRepos = async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -34,33 +35,73 @@ export const createRepo = async (req, res) => {
 
   const token = authHeader.split(' ')[1];
   const payload = jwtDecode(token);
-  let containerId = "1234"; 
+  let containerId = null;
 
-  const imageList = [
-    { cpp: 'ubuntu' },
-    { node: 'my-node-image' },
-    { python: 'my-conda-python-image' }
-  ];
+  // Map framework/language to the specific Docker image name from executionImages.js
+  const imageMapping = {
+    'python': 'code-collab-python-executor',
+    'javascript': 'code-collab-node-executor',
+    'typescript': 'code-collab-node-executor',
+    'cpp': 'code-collab-cpp-executor',
+    'java': 'code-collab-java-executor',
+    'flask': 'code-collab-python-flask-executor',
+    'fastapi': 'code-collab-python-fastapi-executor',
+    'django': 'code-collab-python-django-executor',
+    'express': 'code-collab-node-express-executor',
+    'react-vite': 'code-collab-node-vite-react-executor',
+    'spring-boot': 'code-collab-java-spring-boot-executor',
+    'cpp-cmake': 'code-collab-cpp-cmake-executor',
+    'bare': 'code-collab-bare-machine-executor'
+  };
 
-  try {
-    containerId = await createContainerFromImages(imageList, language);
-  } catch (err) {
-    console.error('Failed to create container:', err.message);
+  const imageName = imageMapping[language];
+  
+  if (!imageName) {
+    return res.status(400).json({ 
+      error: `Unsupported template: ${language}. Please select a valid framework from the list.` 
+    });
   }
 
-  const user = await User.findOne({ userId: payload.sub });
-  if (!user) {
-    const newUser = new User({ userId: payload.sub, repos: [] });
-    await newUser.save();
-    newUser.repos.push({ repoName, language, type, vmId: containerId, sharedUsers: [] });
-    newUser.repos[0].sharedUsers.push({ userId: payload.sub, role: 'Owner' });
-    await newUser.save();
-    res.json({ message: 'Repository created successfully', user: newUser });
-  } else {
-    user.repos.push({ repoName, language, type, vmId: containerId, sharedUsers: [] });
-    user.repos[user.repos.length - 1].sharedUsers.push({ userId: payload.sub, role: 'Owner' });
+  try {
+    // We pass a simplified imageList to createContainerFromImages
+    // or just modify createContainerFromImages to accept a single string if that's easier.
+    // For now, let's stick to the current signature or slightly adapt it.
+    containerId = await createContainerFromImages([{ [language]: imageName }], language);
+  } catch (err) {
+    console.error('Failed to create container:', err.message);
+    return res.status(500).json({ error: 'Failed to provision VM: ' + err.message });
+  }
+
+  // Trigger background initialization
+  initializeVM(containerId).catch(err => console.error('Init trigger error:', err));
+
+  try {
+    let user = await User.findOne({ userId: payload.sub });
+    if (!user) {
+      user = new User({ userId: payload.sub, repos: [] });
+    }
+
+    const newRepo = {
+      repoName,
+      language,
+      type: type === 'public' ? 'Public' : 'Private', // Normalize case
+      vmId: containerId,
+      sharedUsers: [{ userId: payload.sub, role: 'Owner' }]
+    };
+
+    user.repos.push(newRepo);
     await user.save();
-    res.json({ message: 'Repository created successfully', user });
+
+    // Find the newly pushed repo to get its _id and full object
+    const createdRepo = user.repos[user.repos.length - 1];
+
+    res.json({
+      message: 'Repository created successfully',
+      repo: createdRepo
+    });
+  } catch (err) {
+    console.error('Database error:', err);
+    res.status(500).json({ error: 'Failed to save repository to database' });
   }
 };
 
@@ -135,6 +176,8 @@ export const checkRepo = async (req, res) => {
 
   const users = await getSharedUserIdsByVmId(id);
   if (users.find(user => user === payload.sub)) {
+    // Ensure VM is initialized when user enters
+    initializeVM(id).catch(err => console.error('Init trigger error:', err));
     return res.status(200).json({ message: 'User has access' });
   }
 

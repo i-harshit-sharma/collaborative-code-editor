@@ -130,6 +130,8 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
     };
 
     useEffect(() => {
+        const socketUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+        
         // Initialize xterm and addons
         xterm.current = new Terminal({
             cursorBlink: true,
@@ -140,7 +142,11 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
             },
         });
 
-        socketRef.current = io('http://localhost:4000');
+        socketRef.current = io(socketUrl);
+        
+        // Join the VM room immediately upon connection
+        socketRef.current.emit('join-room', { roomId: id });
+
         fitAddon.current = new FitAddon();
         xterm.current.loadAddon(fitAddon.current);
 
@@ -196,21 +202,28 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
         };
     }, []);
 
-    const send = io('http://localhost:4000')
-
     useEffect(() => {
         const path = '/app';
-        console.log('Getting files from path:', path);
-        send.on('filesReady', data => {
-            send.emit('getFiles', { path, id });
-            send.on('files', data => {
-                // console.log('Received files:', data.files);
-                const tree = buildFileTree(data.files);
-                console.log('Parsed tree:', tree);
-                setFiledata(tree);
-            });
-        })
-    }, [socketRef]);
+        if (!socketRef.current) return;
+        const socket = socketRef.current;
+
+        const handleFilesReady = () => {
+            socket.emit('getFiles', { path, id });
+        };
+
+        const handleFiles = (data) => {
+            const tree = buildFileTree(data.files);
+            setFiledata(tree);
+        };
+
+        socket.on('filesReady', handleFilesReady);
+        socket.on('files', handleFiles);
+
+        return () => {
+            socket.off('filesReady', handleFilesReady);
+            socket.off('files', handleFiles);
+        };
+    }, [id]);
 
     function buildFileTree(lines) {
         let idCounter = 1;
@@ -335,10 +348,10 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
             {/* Sidebar */}
             <div style={{ width: (showSidebar ? sidebarWidth : 0) }} className="bg-dark-4 ">
                 {sidebarValue == 'explorer' && filedata &&
-                    <FileExplorer data={filedata} width={showSidebar?sidebarWidth:0} socket={send} />
+                    <FileExplorer data={filedata} width={showSidebar?sidebarWidth:0} socket={socketRef.current} />
                 }
                 {sidebarValue === 'search' && filedata &&
-                    <SearchL socket={send}/>
+                    <SearchL socket={socketRef.current}/>
                 }
                 {/* {sidebarValue === 'git' && filedata &&
                     <FileExplorer data={filedata} />
@@ -347,7 +360,7 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
                     <Share />
                 }
                 {sidebarValue === 'chat' && filedata &&
-                    <Chat data={filedata} />
+                    <Chat data={filedata} socket={socketRef.current} roomId={id} />
                 }
                 {sidebarValue === 'draw' && filedata && (
                     <div>Hi</div>
@@ -369,7 +382,7 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
                 <div style={{ height: topHeight2, background: '#9f9' }}>
                         {(sidebarValue === 'draw') && (<Whiteboard />)}
                     <div ref={mainRef} className="flex h-full w-full">
-                        <VSCodeLikeEditor socket={send} />
+                        <VSCodeLikeEditor socket={socketRef.current} />
                     </div>
                 </div>
 

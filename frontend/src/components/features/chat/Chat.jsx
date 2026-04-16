@@ -4,9 +4,7 @@ import { io } from "socket.io-client";
 import { useUser } from "@clerk/clerk-react";
 import { Paperclip } from "lucide-react";
 
-const socket = io("http://localhost:4000"); // Point to server
-
-function Chat() {
+function Chat({ socket, roomId }) {
   const { user } = useUser();
   const username = user?.firstName || "Anonymous"; // Fallback to "Anonymous" if no user
   const img = user?.imageUrl || "";
@@ -14,16 +12,23 @@ function Chat() {
   const [chat, setChat] = useState([]);
 
   useEffect(() => {
+    if (!socket || !roomId) return;
+    
+    // Notify the server we joined
+    socket.emit('join-room', { roomId });
+
     socket.on("receive_message", (data) => {
       setChat((prev) => [...prev, data]);
     });
 
-    return () => socket.off("receive_message");
-  }, []);
+    return () => {
+      socket.off("receive_message");
+    };
+  }, [socket, roomId]);
 
   const sendMessage = () => {
-    if (message.trim()) {
-      socket.emit("send_message", { username, type: "text", content: message, img: img });
+    if (message.trim() && socket && roomId) {
+      socket.emit("send_message", { roomId, username, type: "text", content: message, img: img });
       setMessage("");
     }
   };
