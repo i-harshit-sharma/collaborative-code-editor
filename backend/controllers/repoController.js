@@ -3,6 +3,7 @@ import { jwtDecode } from 'jwt-decode';
 import { createContainerFromImages } from '../services/dockerService.js';
 import { getSharedUserIdsByVmId } from '../services/repoService.js';
 import { initializeVM } from '../services/containerInitService.js';
+import { vmTemplates } from '../config/vmTemplates.js';
 
 export const getRepos = async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -37,24 +38,8 @@ export const createRepo = async (req, res) => {
   const payload = jwtDecode(token);
   let containerId = null;
 
-  // Map framework/language to the specific Docker image name from executionImages.js
-  const imageMapping = {
-    'python': 'code-collab-python-executor',
-    'javascript': 'code-collab-node-executor',
-    'typescript': 'code-collab-node-executor',
-    'cpp': 'code-collab-cpp-executor',
-    'java': 'code-collab-java-executor',
-    'flask': 'code-collab-python-flask-executor',
-    'fastapi': 'code-collab-python-fastapi-executor',
-    'django': 'code-collab-python-django-executor',
-    'express': 'code-collab-node-express-executor',
-    'react-vite': 'code-collab-node-vite-react-executor',
-    'spring-boot': 'code-collab-java-spring-boot-executor',
-    'cpp-cmake': 'code-collab-cpp-cmake-executor',
-    'bare': 'code-collab-bare-machine-executor'
-  };
-
-  const imageName = imageMapping[language];
+  const imageConfig = vmTemplates[language];
+  const imageName = imageConfig?.image;
   
   if (!imageName) {
     return res.status(400).json({ 
@@ -182,4 +167,34 @@ export const checkRepo = async (req, res) => {
   }
 
   return res.status(403).json({ message: 'User does not have access' });
+};
+
+/**
+ * Get VM metadata (language, default ports, etc.) by vmId
+ */
+export const getVmMetadata = async (req, res) => {
+  const { vmId } = req.params;
+
+  try {
+    const user = await User.findOne({ "repos.vmId": vmId });
+    if (!user) {
+      return res.status(404).json({ error: 'VM not found' });
+    }
+
+    const repo = user.repos.find(r => r.vmId === vmId);
+    if (!repo) {
+      return res.status(404).json({ error: 'VM not found in user repos' });
+    }
+
+    const template = vmTemplates[repo.language] || {};
+    
+    res.json({
+      language: repo.language,
+      repoName: repo.repoName,
+      defaultPorts: template.ports || [3000, 5000, 8000, 8080]
+    });
+  } catch (err) {
+    console.error('Failed to get VM metadata:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };

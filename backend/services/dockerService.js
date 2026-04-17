@@ -10,9 +10,22 @@ export const createContainerFromImages = async (imageList, language) => {
         Image: imageName,
         Cmd: ['bash'],
         Tty: true,
+        ExposedPorts: {
+          '80/tcp': {},
+          '3000/tcp': {},
+          '4173/tcp': {},
+          '5000/tcp': {},
+          '5173/tcp': {},
+          '8000/tcp': {},
+          '8080/tcp': {},
+        },
+        HostConfig: {
+          PublishAllPorts: true,
+        },
       });
 
-      console.log(`Container created from image "${imageName}"`);
+      await container.start();
+      console.log(`Container created and started from image "${imageName}"`);
       return container.id;
     } catch (err) {
       console.warn(`Failed with image "${imageName}": ${err.message}`);

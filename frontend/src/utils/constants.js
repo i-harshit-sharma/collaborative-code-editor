@@ -10,6 +10,7 @@ const frameworks = [
     { value: "django", label: "Django", language: "Python", description: "Full-featured Python web framework", tag: "websites" },
     { value: "express", label: "Express", language: "Javascript", description: "Standard Node.js web framework", tag: "websites" },
     { value: "react-vite", label: "React (Vite)", language: "Javascript", description: "Modern frontend development with Vite", tag: "websites" },
+    {value: "nextjs", label: "Next.js", language: "Javascript", description: "React framework for production", tag: "websites"},
     { value: "spring-boot", label: "Spring Boot", language: "Java", description: "Enterprise Java framework", tag: "websites" },
     { value: "cpp-cmake", label: "C++ (CMake)", language: "C++", description: "Structured C++ project with CMake", tag: "language" },
     { value: "bare", label: "Bare Machine", language: "Ubuntu", description: "Minimal Ubuntu environment with basic build tools", tag: "language" },
@@ -18,7 +19,7 @@ const frameworks = [
 const LANGUAGE_VERSIONS = {
     javascript: "24.0 (Slim)",
     typescript: "24.0 (Slim)",
-    python: "3.9 (Slim)",
+    python: "3.11 (Slim)",
     java: "17.0 (Temurin)",
     cpp: "14.2 (GCC Latest)",
     ubuntu: "22.04 (LTS)",

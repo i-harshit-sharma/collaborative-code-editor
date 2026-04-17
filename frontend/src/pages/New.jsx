@@ -9,24 +9,17 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import Loader from '../components/ui/Loader.jsx';
 import { LANGUAGE_VERSIONS } from '../utils/constants.js'
+import { adjectives, nouns } from '../utils/words.js'
 // import Videocall from '../components/features/collaboration/Videocall.jsx';
 
 
-async function fetchRandomWord(signal) {
-  const response = await fetch("https://random-word-api.herokuapp.com/word?diff=2&number=3", { signal });
-  if (!response.ok) {
-    throw new Error("Failed to fetch word");
-  }
-  const data = await response.json();
-  return data;
-}
-
 async function generateRandomName(signal) {
   try {
-    const words = await fetchRandomWord(signal)
-    return words.join("_");
+    const adj1 = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const adj2 = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const noun = nouns[Math.floor(Math.random() * nouns.length)];
+    return `${adj1}_${adj2}_${noun}_${Math.floor(Math.random() * 10000)}`;
   } catch (error) {
-    if (error.name === 'AbortError') throw error;
     console.error("Error generating random name: ", error);
     return "";
   }

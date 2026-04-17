@@ -7,15 +7,22 @@ import { markVMActive } from './vmMonitor.js';
 export default (io, socket, rooms, userList) => {
   socket.on('getFiles', (data) => {
     if (data.id) markVMActive(data.id);
-    const cmd = `docker exec ${data.id} ls -laR ${data.path}`;
+    const basePath = data.path || '/app';
+    // Use find to get a structured list of files/dirs, excluding heavy folders
+    const cmd = `docker exec ${data.id} find ${basePath} -maxdepth 5 -not -path '*/.*' -not -path '*/node_modules*' -not -path '*/.next*' -not -path '*/dist*' -not -path '*/build*' -printf "%y %p\\n"`;
+    
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
+        console.error('getFiles error:', stderr);
         return socket.emit('files', { error: stderr });
       }
-      const files = stdout.split('\n').slice(1).map(line => line.trim()).filter(Boolean);
-      socket.emit('files', { files });
+
+      const lines = stdout.split('\n').filter(Boolean);
+      const tree = buildTreeFromFind(lines, basePath);
+      socket.emit('files', { tree });
     });
   });
+
 
   socket.on('openFile', (data) => {
     if (data.id) markVMActive(data.id);
@@ -51,6 +58,24 @@ export default (io, socket, rooms, userList) => {
     });
   });
 
+  socket.on('createFile', ({ id, path: filePath }) => {
+    if (id) markVMActive(id);
+    const cmd = `docker exec ${id} touch "${filePath}"`;
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) return socket.emit('createError', { error: stderr });
+      socket.emit("filesReady", 'files are ready to be read');
+    });
+  });
+
+  socket.on('createFolder', ({ id, path: folderPath }) => {
+    if (id) markVMActive(id);
+    const cmd = `docker exec ${id} mkdir -p "${folderPath}"`;
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) return socket.emit('createError', { error: stderr });
+      socket.emit("filesReady", 'files are ready to be read');
+    });
+  });
+
   socket.on('save-file', ({ roomId, path: rawPath, code }) => {
     if (roomId) markVMActive(roomId);
     const filePath = rawPath.replace(/\\/g, '/');
@@ -69,29 +94,64 @@ export default (io, socket, rooms, userList) => {
     });
   });
 
-  socket.on('code-change', async ({ roomId, path, code, token }) => {
-    if (!token) return;
+  socket.on('code-change', async ({ roomId, path, code }) => {
     if (roomId) markVMActive(roomId);
-    const payload = jwtDecode(token);
-    const userId = payload.sub;
+    
+    // Use cached userId from join-room
+    const userId = socket.data.userId || 'unknown';
     
     if (!rooms[roomId]) rooms[roomId] = {};
     rooms[roomId][path] = code;
-    socket.to(roomId).emit('code-change', { path, code, userId: userId });
+    socket.to(roomId).emit('code-change', { path, code, userId });
   });
 
-  socket.on('cursor-change', async ({ roomId, path, position, token }) => {
-    if (!token) {
-      if (roomId) markVMActive(roomId);
-      socket.to(roomId).emit('cursor-change', { path, position, username: roomId });
-      return;
-    }
+  socket.on('cursor-change', async ({ roomId, path, position }) => {
     if (roomId) markVMActive(roomId);
-    const payload = jwtDecode(token);
-    const userId = payload.sub;
-    const currentUsers = await clerkClient.users.getUserList();
-    const user = currentUsers?.data?.find(u => u.id === userId);
-    const userName = user ? (user.firstName + " " + user.lastName) : "Unknown User";
-    socket.to(roomId).emit('cursor-change', { path, position, username: userName });
+    
+    // Use cached username from join-room
+    const username = socket.data.username || socket.data.userId || 'Unknown User';
+    
+    socket.to(roomId).emit('cursor-change', { path, position, username });
   });
 };
+
+function buildTreeFromFind(lines, basePath) {
+  const root = [];
+  const map = {};
+
+  lines.forEach(line => {
+    const type = line[0]; // 'd' or 'f'
+    let fullPath = line.substring(2).trim();
+    if (!fullPath || fullPath === basePath) return;
+
+    // Relative path from basePath
+    const relativePath = fullPath.startsWith(basePath) 
+      ? fullPath.slice(basePath.length).replace(/^\//, '') 
+      : fullPath;
+    
+    const parts = relativePath.split('/').filter(Boolean);
+    let currentLevel = root;
+    let pathAcc = basePath;
+
+    parts.forEach((part, index) => {
+      pathAcc = (pathAcc === '/' ? '' : pathAcc) + '/' + part;
+      const isLast = index === parts.length - 1;
+
+      if (!map[pathAcc]) {
+        const node = { 
+          id: pathAcc, 
+          name: part 
+        };
+        if (!isLast || type === 'd') {
+          node.children = [];
+        }
+        map[pathAcc] = node;
+        currentLevel.push(node);
+      }
+      currentLevel = map[pathAcc].children;
+    });
+  });
+
+  return root;
+}
+

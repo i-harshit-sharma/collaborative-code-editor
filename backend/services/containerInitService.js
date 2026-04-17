@@ -12,23 +12,39 @@ export const initializeVM = async (containerId) => {
   try {
     const container = docker.getContainer(containerId);
     
-    // 1. Check if already initialized
-    const checkCmd = `docker exec ${containerId} ls /app/.initialized`;
-    try {
-      await execPromise(checkCmd);
+    // 1. Ensure container is running
+    const info = await container.inspect();
+    if (!info.State.Running) {
+      console.log(`🚀 Starting stopped VM ${containerId}...`);
+      await container.start();
+    }
+    
+    // 2. Check if already initialized
+    const checkExec = await container.exec({
+      Cmd: ['ls', '/.initialized'],
+      AttachStdout: true,
+      AttachStderr: true
+    });
+    
+    const checkStream = await checkExec.start();
+    // Consume the stream to wait for the command to finish
+    await new Promise((resolve, reject) => {
+      checkStream.on('data', () => {}); // We don't need the output, just consume it
+      checkStream.on('end', resolve);
+      checkStream.on('error', reject);
+    });
+    
+    const { ExitCode } = await checkExec.inspect();
+    if (ExitCode === 0) {
       console.log(`ℹ️ VM ${containerId} already initialized.`);
       return;
-    } catch (err) {
-      // Marker file not found, proceed with init
-      console.log(`🚀 Initializing VM ${containerId} in background...`);
     }
 
-    // 2. Perform background setup
-    // We run this in the background using docker.exec or child_process
-    // We'll use a single block to minimize overhead
+    // 3. Perform background setup
+    console.log(`🚀 Initializing VM ${containerId} in background...`);
     const initScript = `
       # Create initialized marker
-      touch /app/.initialized && \
+      touch /.initialized && \
       # Set up local environment if needed
       echo "✅ VM Initialization Complete"
     `;

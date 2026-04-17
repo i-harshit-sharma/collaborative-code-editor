@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Editor from '@monaco-editor/react';
 import { useParams } from "react-router-dom";
 import { useAuth, useUser } from "@clerk/clerk-react";
+import { configureMonaco } from "../../../utils/monacoConfig";
 
 const getLanguageFromFile = (filename) => {
   const extension = filename.split('.').pop().toLowerCase();
@@ -16,9 +17,10 @@ const getLanguageFromFile = (filename) => {
   return map[extension] || 'plaintext';
 };
 
-export default function EditorContainer({ socket }) {
+export default function EditorContainer({ socket, activePath, setActivePath }) {
   const [tabs, setTabs] = useState([]);
-  const [activePath, setActivePath] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('saved'); // 'saved', 'saving', 'unsaved'
+
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const remoteDecsRef = useRef({});
@@ -26,6 +28,7 @@ export default function EditorContainer({ socket }) {
   const { getToken } = useAuth();
   const { user } = useUser();
   const userCursors = useRef({});
+  const saveTimeoutRef = useRef(null);
 
   // Join and leave room
   useEffect(() => {
@@ -138,19 +141,21 @@ export default function EditorContainer({ socket }) {
     // Try to reuse existing model
     let model = monaco.editor.getModel(uri);
 
+    const currentTab = tabs.find(t => t.path === activePath);
+    if (!currentTab) return;
+
     if (model) {
-      const { content } = tabs.find(t => t.path === activePath);
-      if (model.getValue() !== content) {
-        model.setValue(content);
+      if (model.getValue() !== currentTab.content) {
+        model.setValue(currentTab.content);
       }
     } else {
-      const { content } = tabs.find(t => t.path === activePath);
       model = monaco.editor.createModel(
-        content,
+        currentTab.content,
         getLanguageFromFile(activePath),
         uri
       );
     }
+
 
     editor.setModel(model);
   }, [activePath, tabs]);
@@ -159,13 +164,29 @@ export default function EditorContainer({ socket }) {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
+    // Use our extendable configuration utility
+    configureMonaco(monaco);
+
     editor.onDidChangeModelContent(async e => {
-      // if (e.isFlush) return;
+      if (e.isFlush) return;
+
       const code = editor.getValue();
       if (!activePath) return;
       const token = await getToken();
-      console.log("code change")
+      
+      // Sync in real-time
       socket.emit('code-change', { roomId, path: activePath, code, token });
+
+      // Debounced Auto-save
+      setSaveStatus('unsaved');
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      
+      saveTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('saving');
+        socket.emit('save-file', { roomId, path: activePath, code });
+        // Assume saved after a short delay or we could listen for a save-success event
+        setTimeout(() => setSaveStatus('saved'), 1000);
+      }, 2000);
     });
 
     editor.onDidChangeCursorPosition(async e => {
@@ -202,11 +223,29 @@ export default function EditorContainer({ socket }) {
           <div
             key={tab.path}
             onClick={() => setActivePath(tab.path)}
-            className={`flex items-center px-2 py-1 cursor-pointer border-r ${tab.path === activePath ? 'bg-gray-800 text-white' : 'text-gray-300'}`}
+            className={`flex items-center px-3 py-1.5 cursor-pointer border-r border-gray-800 transition-colors group ${tab.path === activePath ? 'bg-dark-1 text-white shadow-[inset_0_-2px_0_0_#3b82f6]' : 'text-gray-400 hover:bg-dark-2'}`}
           >
-            <span className="truncate w-32 flex text-sm items-center">{tab.path?.split('/').pop()} </span>
-            <Check size={14} className="mr-2" onClick={saveFile}/>
-            <X size={14} onClick={e => { e.stopPropagation(); handleCloseTab(tab.path); }} />
+            <span className="truncate max-w-[120px] text-xs font-medium">
+              {tab.path?.split('/').pop()}
+            </span>
+            
+            <div className="ml-2 flex items-center justify-center w-5 h-5 rounded-md hover:bg-white/10 transition-colors"
+                 onClick={e => { e.stopPropagation(); handleCloseTab(tab.path); }}>
+              {tab.path === activePath ? (
+                // For active tab, show state-dependent icon
+                saveStatus === 'saved' ? (
+                  <X size={14} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                ) : (
+                  <div className="relative flex items-center justify-center">
+                    <div className={`w-2 h-2 rounded-full bg-blue-500 transition-all group-hover:scale-0 group-hover:opacity-0 ${saveStatus === 'saving' ? 'animate-pulse' : ''}`} />
+                    <X size={14} className="absolute inset-0 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                )
+              ) : (
+                // For inactive tabs, just show X on hover
+                <X size={14} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
+            </div>
           </div>
         ))}
       </div>

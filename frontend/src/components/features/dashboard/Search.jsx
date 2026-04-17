@@ -23,24 +23,37 @@ const SearchL = ({socket}) => {
     const [loading, setLoading] = useState(false)
     const [params, setParams] = useState({})
 
+    const searchTimeoutRef = useRef(null);
+
     const handleSearch = (e) => {
-        const value = e.target.value
-        setParams((prev) => ({...prev, search: value}))
+        const value = e.target.value;
+        setParams((prev) => ({ ...prev, search: value }));
+        
         if (value.length < 3) {
-            setSearchResults([])
-            return
+            setSearchResults([]);
+            return;
         }
-        setLoading(true)
-        console.log(value)
-        grepInContainer(id, value).then((matches) => {
-            setSearchResults(matches)
-            // console.log(matches)
-        }).catch((err) => {
-            console.error(err)
-        }).finally(() => {
-            setLoading(false);
-        });
-    }
+
+        // Clear existing timeout to debounce
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        // Set a new timeout to trigger search
+        searchTimeoutRef.current = setTimeout(() => {
+            setLoading(true);
+            grepInContainer(id, value)
+                .then((matches) => {
+                    setSearchResults(matches);
+                })
+                .catch((err) => {
+                    console.error(err);
+                })
+                .finally(() => {
+                    setLoading(false);
+                });
+        }, 500); // 500ms delay
+    };
 
     return (
         <div className='flex flex-col w-full h-full overflow-y-scroll no-scrollbar'>

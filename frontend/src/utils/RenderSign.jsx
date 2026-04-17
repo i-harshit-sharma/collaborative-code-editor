@@ -1,5 +1,5 @@
 import React from 'react'
-import { CplusplusOriginal, JavaOriginal, JavascriptOriginal, ReactOriginal, Html5Original, NodejsOriginal, PythonOriginal, TypescriptOriginal, UbuntuPlain, FastapiOriginal, DjangoPlain, FlaskOriginal } from 'devicons-react';
+import { CplusplusOriginal, JavaOriginal, JavascriptOriginal, ReactOriginal, Html5Original, NodejsOriginal, PythonOriginal, TypescriptOriginal, UbuntuPlain, FastapiOriginal, DjangoPlain, FlaskOriginal, NextjsOriginal } from 'devicons-react';
 
 const RenderSign = ({ language, size = 24 }) => {
     switch (language) {
@@ -31,6 +31,8 @@ const RenderSign = ({ language, size = 24 }) => {
             return <JavaOriginal size={size} />
         case "bare":
             return <UbuntuPlain size={size} />
+        case 'nextjs':
+            return <NextjsOriginal size={size} />
 
         default:
             return <NodejsOriginal size={size} />;

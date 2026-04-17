@@ -5,15 +5,22 @@ import { randomBytes } from 'crypto';
 import User from '../models/User.js';
 
 export default (io, socket) => {
-  socket.on('sendToken', async ({ token, containerId }) => {
-    console.log('Received containerId:', containerId);
+  const ptyProcesses = new Map();
+
+  socket.on('sendToken', async ({ token, containerId, terminalId }) => {
+    console.log('Received containerId:', containerId, 'terminalId:', terminalId);
+
+    if (!terminalId) {
+      console.error('Missing terminalId in sendToken');
+      return;
+    }
 
     let payload;
     try {
       payload = jwtDecode(token);
     } catch (err) {
       console.error('Invalid token:', err);
-      socket.emit('output', 'Error: Invalid token.');
+      socket.emit('output', { terminalId, data: 'Error: Invalid token.\r\n' });
       return;
     }
 
@@ -22,12 +29,12 @@ export default (io, socket) => {
       user = await User.findOne({ userId: payload.sub });
     } catch (err) {
       console.error('Database lookup error:', err);
-      socket.emit('output', 'Error: Database error.');
+      socket.emit('output', { terminalId, data: 'Error: Database error.\r\n' });
       return;
     }
     if (!user) {
       console.error('User not found in DB:', payload.sub);
-      socket.emit('output', 'Error: User not found.');
+      socket.emit('output', { terminalId, data: 'Error: User not found.\r\n' });
       return;
     }
 
@@ -53,9 +60,14 @@ export default (io, socket) => {
         console.log('✅ New container started:', containerIdOrName);
       } catch (createErr) {
         console.error('❌ Failed to create or start container:', createErr);
-        socket.emit('output', 'Error: Failed to create or start new container.');
+        socket.emit('output', { terminalId, data: 'Error: Failed to create or start new container.\r\n' });
         return;
       }
+    }
+
+    // Kill existing process if same terminalId is reused for some reason
+    if (ptyProcesses.has(terminalId)) {
+      ptyProcesses.get(terminalId).kill();
     }
 
     const ptyProcess = pty.spawn('docker', ['exec', '-u', 'root', '-it', containerIdOrName, '/bin/bash'], {
@@ -66,22 +78,66 @@ export default (io, socket) => {
       env: process.env,
     });
 
-    console.log('🔥 PTY session started for container:', containerIdOrName);
+    console.log(`🔥 PTY session started for terminal: ${terminalId} in container: ${containerIdOrName}`);
 
-    console.log('🔥 PTY session started for container:', containerIdOrName);
+    ptyProcesses.set(terminalId, ptyProcess);
 
     ptyProcess.on('data', (data) => {
-      socket.emit('output', { data });
+      socket.emit('output', { terminalId, data });
     });
 
-    socket.on('input', (data) => {
-      ptyProcess.write(data);
+    ptyProcess.on('exit', () => {
+      ptyProcesses.delete(terminalId);
     });
+  });
 
-    socket.on('disconnect', () => {
-      console.log('Client disconnected from terminal:', socket.id);
+  socket.on('input', ({ terminalId, data }) => {
+    const ptyProcess = ptyProcesses.get(terminalId);
+    if (ptyProcess) {
+      try {
+        ptyProcess.write(data);
+      } catch (err) {
+        console.error(`Error writing to PTY ${terminalId}:`, err);
+      }
+    }
+  });
+
+  socket.on('resize', ({ terminalId, cols, rows }) => {
+    const ptyProcess = ptyProcesses.get(terminalId);
+    if (ptyProcess && cols && rows) {
+      try {
+        ptyProcess.resize(cols, rows);
+      } catch (err) {
+        console.error(`Error resizing PTY ${terminalId}:`, err);
+      }
+    }
+  });
+
+  socket.on('terminal-resize', ({ terminalId, cols, rows }) => {
+    const ptyProcess = ptyProcesses.get(terminalId);
+    if (ptyProcess && cols && rows) {
+      try {
+        ptyProcess.resize(cols, rows);
+      } catch (err) {
+        console.error(`Error resizing PTY ${terminalId}:`, err);
+      }
+    }
+  });
+
+  socket.on('closeTerminal', ({ terminalId }) => {
+    const ptyProcess = ptyProcesses.get(terminalId);
+    if (ptyProcess) {
+      console.log(`Closing terminal session: ${terminalId}`);
       ptyProcess.kill();
-      // The global 'disconnecting' listener in index.js handles container shutdown
+      ptyProcesses.delete(terminalId);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected, cleaning up terminals for socket:', socket.id);
+    ptyProcesses.forEach((ptyProcess, terminalId) => {
+      ptyProcess.kill();
     });
+    ptyProcesses.clear();
   });
 };

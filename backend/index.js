@@ -8,7 +8,10 @@ import fs from 'fs-extra';
 
 import connectDB from './config/db.js';
 import initSocket from './socket/index.js';
+import cookieParser from 'cookie-parser';
 import initRoutes from './routes/index.js';
+import { handlePortProxy, handlePortProxyUpgrade } from './middleware/portProxy.js';
+import { handleFallbackProxy } from './middleware/fallbackProxy.js';
 
 dotenv.config();
 
@@ -32,15 +35,27 @@ const server = http.createServer(app);
 // Initialize Sockets
 const io = initSocket(server);
 
+// Handle WebSocket upgrades for Port Proxy
+server.on('upgrade', (req, socket, head) => {
+  if (req.url.startsWith('/proxy')) {
+    handlePortProxyUpgrade(req, socket, head);
+  }
+});
+
 // Middleware
 app.use(cors({
   origin: 'http://localhost:5173',
   credentials: true,
 }));
+app.use(cookieParser());
+app.all(['/proxy/:vmId/:port', '/proxy/:vmId/:port/*path'], handlePortProxy);
 app.use(express.json());
 
 // Initialize Routes
 app.use('/', initRoutes(io));
+
+// Fallback for absolute paths from VM apps
+app.use(handleFallbackProxy);
 
 // Database Connection
 connectDB();
