@@ -1,7 +1,41 @@
 import httpProxy from 'http-proxy';
-import docker from '../config/docker.js';
+import docker, { isRunningInDocker } from '../config/docker.js';
 
 const proxy = httpProxy.createProxyServer({});
+
+/**
+ * Helper to determine the proxy target URL.
+ * In Docker environments, it uses the container's internal IP.
+ * In local environments, it uses 127.0.0.1 and the mapped HostPort.
+ */
+const getProxyTarget = (info, port) => {
+  if (isRunningInDocker()) {
+    const networks = info.NetworkSettings.Networks;
+    const networkNames = Object.keys(networks);
+    
+    // Find the first network that has an IP address assigned
+    let containerIp = info.NetworkSettings.IPAddress;
+    for (const name of networkNames) {
+      if (networks[name].IPAddress) {
+        containerIp = networks[name].IPAddress;
+        break;
+      }
+    }
+
+    if (!containerIp) {
+      console.warn(`No IP address found for container ${info.Id} on any network.`);
+      return null;
+    }
+
+    return `http://${containerIp}:${port}`;
+  } else {
+    const portMapping = info.NetworkSettings.Ports[`${port}/tcp`];
+    if (portMapping && portMapping.length > 0) {
+      return `http://127.0.0.1:${portMapping[0].HostPort}`;
+    }
+  }
+  return null;
+};
 
 // Error handling for proxy
 proxy.on('error', (err, req, res) => {
@@ -38,19 +72,15 @@ export const handlePortProxy = async (req, res) => {
     const container = docker.getContainer(vmId);
     const info = await container.inspect();
     
-    // Find the host port mapping for the requested container port
-    const portMapping = info.NetworkSettings.Ports[`${port}/tcp`];
+    const target = getProxyTarget(info, port);
     
-    if (!portMapping || portMapping.length === 0) {
-      console.error(`Port ${port} not mapped for container ${vmId}`);
+    if (!target) {
+      console.error(`Could not determine target for container ${vmId} on port ${port}`);
       return res.status(404).json({ 
-        error: 'Port not mapped', 
-        message: `The port ${port} must be exposed and published by Docker. Try recreating your repository.`
+        error: 'Target unreachable', 
+        message: `The port ${port} is not accessible. If running in Docker, ensure the containers are on the same network.`
       });
     }
-
-    const hostPort = portMapping[0].HostPort;
-    const target = `http://127.0.0.1:${hostPort}`;
 
     // Strip the /proxy/:vmId/:port prefix from the URL
     // e.g. /proxy/123/3000/api/data -> /api/data
@@ -94,11 +124,9 @@ export const handlePortProxyUpgrade = async (req, socket, head) => {
   try {
     const container = docker.getContainer(vmId);
     const info = await container.inspect();
-    const portMapping = info.NetworkSettings.Ports[`${port}/tcp`];
+    const target = getProxyTarget(info, port);
 
-    if (portMapping && portMapping.length > 0) {
-      const hostPort = portMapping[0].HostPort;
-      const target = `http://127.0.0.1:${hostPort}`;
+    if (target) {
 
       // Rewrite URL
       const prefix = `/proxy/${vmId}/${port}`;
