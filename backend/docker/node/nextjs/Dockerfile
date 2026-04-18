@@ -1,6 +1,7 @@
 FROM node:24-slim
 
 ENV WATCHPACK_POLLING=true
+ENV HOSTNAME="0.0.0.0"
 
 WORKDIR /app
 

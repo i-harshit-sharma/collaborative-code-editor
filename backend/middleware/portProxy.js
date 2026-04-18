@@ -39,13 +39,20 @@ const getProxyTarget = (info, port) => {
 
 // Error handling for proxy
 proxy.on('error', (err, req, res) => {
+  // If the error was already handled by the local callback in handlePortProxy,
+  // we don't want to send another response here.
+  if (res && res.headersSent) return;
+
   console.error('Proxy Error:', err.message);
-  if (res && !res.headersSent) {
+  
+  if (res && res.writeHead) {
     let status = 502;
     let message = 'The proxy failed to connect to the VM service.';
     
-    if (err.code === 'ECONNREFUSED' || err.message.includes('socket hang up')) {
-      message = 'Connection refused. Is your server running inside the VM? Make sure it is listening on 0.0.0.0 and the port matches.';
+    if (err.code === 'ECONNREFUSED') {
+      message = 'Connection refused. The server inside the VM is not reachable. Ensure it is listening on 0.0.0.0.';
+    } else if (err.code === 'ETIMEDOUT') {
+      message = 'Connection timed out. The server inside the VM is taking too long to respond.';
     }
 
     res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -95,12 +102,30 @@ export const handlePortProxy = async (req, res) => {
     // Log the proxy action
     console.log(`🌐 Proxying ${req.method} ${req.url} -> ${target}`);
 
-    proxy.web(req, res, { 
-      target,
-      changeOrigin: true,
-      xfwd: true,
-      ws: true
-    });
+    // Implement a simple retry mechanism for initial connections
+    const proxyRequest = (attempt = 0) => {
+      proxy.web(req, res, { 
+        target,
+        changeOrigin: true,
+        xfwd: true,
+        ws: true
+      }, (err) => {
+        const isRetryable = err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT';
+        if (isRetryable && attempt < 3) {
+          const delay = 1000 * (attempt + 1);
+          console.log(`♻️  Retry ${attempt + 1}/3 for ${target} in ${delay}ms...`);
+          setTimeout(() => proxyRequest(attempt + 1), delay);
+        } else {
+          // If we reach here, let the global error handler take it
+          // OR handle it here if it's the last attempt
+          if (!res.headersSent) {
+            proxy.emit('error', err, req, res);
+          }
+        }
+      });
+    };
+
+    proxyRequest();
 
   } catch (err) {
     console.error('Proxy Setup Error:', err.message);
