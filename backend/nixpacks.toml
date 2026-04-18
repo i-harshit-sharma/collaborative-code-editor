@@ -1,0 +1,13 @@
+[phases.setup]
+nixPkgs = ["nodejs", "npm", "docker"]
+
+[phases.install]
+dependsOn = ["setup"]
+cmds = [
+  "npm install dockerode",
+  "npm run prerun",
+  "npm install"
+]
+
+[start]
+cmd = "node index.js"
