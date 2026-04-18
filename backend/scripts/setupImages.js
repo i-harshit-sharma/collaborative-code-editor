@@ -51,6 +51,7 @@ async function buildImage(img) {
     console.log(`\n✨ Successfully built ${img.name}\n`);
   } catch (err) {
     console.error(`\n❌ Failed to build ${img.name}: ${err.message}\n`);
+    throw err; // Ensure error propagates
   }
 }
 
@@ -71,10 +72,15 @@ async function pullImage(img) {
     console.log(`\n✨ Successfully pulled ${img.name}\n`);
   } catch (err) {
     console.error(`\n❌ Failed to pull ${img.name}: ${err.message}\n`);
+    throw err; // Ensure error propagates
   }
 }
 
-setupImages().catch(err => {
-  console.error('Fatal error during setup:', err);
-  // process.exit(1);
-});
+// Ensure the script properly waits for completion and handles fatal errors
+try {
+  await setupImages();
+  process.exit(0);
+} catch (err) {
+  console.error('\n💥 Fatal error during setup:', err.message);
+  process.exit(1);
+}
