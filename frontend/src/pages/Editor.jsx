@@ -31,7 +31,7 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
         const fetchMetadata = async () => {
             try {
                 const token = await getToken();
-                const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+                const baseUrl = import.meta.env.VITE_API_BASE_URL;
                 const response = await fetch(`${baseUrl}/protected/vm-metadata/${roomId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -48,7 +48,7 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
     }, [roomId, getToken]);
 
     useEffect(() => {
-        const socketUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+        const socketUrl = import.meta.env.VITE_API_BASE_URL;
         socketRef.current = io(socketUrl);
         
         // Join the room and identify immediately

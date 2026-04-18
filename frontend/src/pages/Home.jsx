@@ -21,7 +21,7 @@ const Home = () => {
   const handleClick = async () => {
     try {
       const token = await getToken();
-      const response = await axios.get("http://localhost:4000/protected/test", {
+      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/protected/test`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -37,7 +37,7 @@ const Home = () => {
     try {
       const get = async () => {
         const token = await getToken()
-        const repos = await axios.post("http://localhost:4000/protected/create-repo",
+        const repos = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/protected/create-repo`,
           { repoName, language, type },
           {
             headers: {

@@ -15,7 +15,7 @@ const PortManager = ({ vmId, defaultPorts }) => {
     }
   }, [defaultPorts]);
 
-  const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+  const backendUrl = import.meta.env.VITE_API_BASE_URL;
 
   const addPort = () => {
     const port = parseInt(newPort);

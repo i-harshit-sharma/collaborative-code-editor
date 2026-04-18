@@ -4,7 +4,7 @@ import Editor from '@monaco-editor/react';
 import io from 'socket.io-client';
 import axios from 'axios';
 
-const socket = io('http://localhost:4000');
+const socket = io(import.meta.env.VITE_API_BASE_URL);
 
 export default function Test() {
   const { roomId } = useParams();
@@ -34,7 +34,7 @@ export default function Test() {
 
   const runCode = async () => {
     try {
-      const response = await axios.post('http://localhost:4000/run', {
+      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/run`, {
         language: 'python3', // You can allow user selection
         code,
       });

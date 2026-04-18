@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 
 async function grepInContainer(containerId, searchTerm) {
     try {
-      const response = await axios.get(`http://localhost:4000/search?term=${searchTerm}&container=${containerId}`, {
+      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/search?term=${searchTerm}&container=${containerId}`, {
       });
       
       console.log('Grep output:', response.data.matches);

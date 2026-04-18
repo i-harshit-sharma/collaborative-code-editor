@@ -21,7 +21,7 @@ setInterval(async () => {
 export default (server) => {
   const io = new Server(server, {
     cors: {
-      origin: '*',
+      origin: true,
       credentials: true,
     }
   });

@@ -5,7 +5,7 @@ import { useAuth } from '@clerk/clerk-react';
 
 // Fetches the list of users shared on a given VM
 async function fetchSharedUsers(vmId) {
-  const response = await axios.get(`http://localhost:4000/${vmId}/shared-users`);
+  const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/${vmId}/shared-users`);
   return response.data.users;
 }
 
@@ -41,7 +41,7 @@ export default function SharedUsersList() {
 
     try {
       await axios.post(
-        'http://localhost:4000/protected/share-repo',
+        `${import.meta.env.VITE_API_BASE_URL}/protected/share-repo`,
         {
           id: vmId,
           obj:{

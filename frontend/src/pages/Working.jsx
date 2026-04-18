@@ -46,7 +46,7 @@
 
 //   // Setup socket once, and create initial terminal
 //   useEffect(() => {
-//     socketRef.current = io('http://localhost:4000');
+//     socketRef.current = io(import.meta.env.VITE_API_BASE_URL);
 
 //     socketRef.current.on('output', ({ terminalId, data }) => {
 //       const entry = terminalsRef.current[terminalId];
@@ -177,7 +177,7 @@ export default function Working() {
 
   // Setup socket once, and create initial terminal
   useEffect(() => {
-    socketRef.current = io('http://localhost:4000');
+    socketRef.current = io(import.meta.env.VITE_API_BASE_URL);
 
     socketRef.current.on('output', ({ terminalId, data }) => {
       const entry = terminalsRef.current[terminalId];

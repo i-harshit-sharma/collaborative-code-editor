@@ -2,7 +2,7 @@ import { Eraser, Minus, Pen, Redo, RedoDot, Undo } from 'lucide-react';
 import React, { useRef, useEffect, useState } from 'react';
 import io from 'socket.io-client';
 
-const SOCKET_SERVER_URL = 'http://localhost:4000';
+const SOCKET_SERVER_URL = import.meta.env.VITE_API_BASE_URL;
 
 export default function Whiteboard() {
   const canvasRef = useRef(null);

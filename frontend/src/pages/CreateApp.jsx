@@ -14,7 +14,7 @@ export default function GitHubRepoViewer() {
     const code = new URLSearchParams(window.location.search).get("code");
     if (code && !token) {
       axios
-        .post("http://localhost:4000/authenticate", { code })
+        .post(`${import.meta.env.VITE_API_BASE_URL}/authenticate`, { code })
         .then((res) => {
           setToken(res.data.access_token);
         });

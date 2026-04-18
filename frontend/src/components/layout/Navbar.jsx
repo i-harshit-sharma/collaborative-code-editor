@@ -123,7 +123,7 @@ const Navbar = ({
         const get = async () => {
             try {
                 const token = await getToken();
-                const response = await axios.get("http://localhost:4000/protected/get-repos", {
+                const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/protected/get-repos`, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                         'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ const Navbar = ({
             }
             try {
                 const token = await getToken();
-                const response = await axios.get("http://localhost:4000/protected/get-shared-repos", {
+                const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/protected/get-shared-repos`, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                         'Content-Type': 'application/json',

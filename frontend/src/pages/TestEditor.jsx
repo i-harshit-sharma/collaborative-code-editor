@@ -16,7 +16,7 @@ function TestEditor() {
 
     setUploading(true);
     try {
-      await axios.post("http://localhost:4000/upload", formData, {
+      await axios.post(`${import.meta.env.VITE_API_BASE_URL}/upload`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
