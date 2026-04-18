@@ -57,6 +57,6 @@ setTimeout(() => {
 }, 10000);
 
 socket.on('connect_error', (err) => {
-  console.error('❌ Connection error:', err.message);
+  console.error('❌ Connection error:', err);
   // process.exit(1);
 });
