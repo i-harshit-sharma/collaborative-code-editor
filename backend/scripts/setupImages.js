@@ -76,5 +76,5 @@ async function pullImage(img) {
 
 setupImages().catch(err => {
   console.error('Fatal error during setup:', err);
-  process.exit(1);
+  // process.exit(1);
 });

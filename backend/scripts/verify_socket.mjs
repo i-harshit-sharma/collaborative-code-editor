@@ -53,10 +53,10 @@ setTimeout(() => {
 setTimeout(() => {
   console.log('--- Verification Done ---');
   socket.disconnect();
-  process.exit(0);
+  // process.exit(0);
 }, 10000);
 
 socket.on('connect_error', (err) => {
   console.error('❌ Connection error:', err.message);
-  process.exit(1);
+  // process.exit(1);
 });
