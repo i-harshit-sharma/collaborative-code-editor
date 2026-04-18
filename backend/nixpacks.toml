@@ -5,9 +5,10 @@ nixPkgs = ["nodejs", "docker"]
 dependsOn = ["setup"]
 cmds = [
   "npm install dockerode",
-  "npm run prerun",
-  "npm install"
+  "npm install" 
+  # Notice: 'npm run prerun' is removed from here
 ]
 
 [start]
-cmd = "node index.js"
+# Run the setup script right before starting the main app
+cmd = "node scripts/setupImages.js && node index.js"
