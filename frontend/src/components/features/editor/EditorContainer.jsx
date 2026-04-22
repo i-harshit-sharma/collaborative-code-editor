@@ -1,9 +1,10 @@
-import { Check, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Editor from '@monaco-editor/react';
 import { useParams } from "react-router-dom";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { configureMonaco } from "../../../utils/monacoConfig";
+import { getIconForFile } from 'vscode-icons-js';
 
 const getLanguageFromFile = (filename) => {
   const extension = filename.split('.').pop().toLowerCase();
@@ -17,9 +18,7 @@ const getLanguageFromFile = (filename) => {
   return map[extension] || 'plaintext';
 };
 
-export default function EditorContainer({ socket, activePath, setActivePath }) {
-  const [tabs, setTabs] = useState([]);
-  const [saveStatus, setSaveStatus] = useState('saved'); // 'saved', 'saving', 'unsaved'
+export default function EditorContainer({ socket, activePath, setActivePath, tabs, setTabs, saveStatuses, setSaveStatuses }) {
 
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -56,22 +55,8 @@ export default function EditorContainer({ socket, activePath, setActivePath }) {
     return () => socket.off('user-joined', handleUserJoined);
   }, [socket]);
 
-  // Receive file content
-  useEffect(() => {
-    if (!socket) return;
-    const onFile = ({ path, content }) => {
-      setTabs(prev => {
-        const found = prev.find(t => t.path === path);
-        if (found) {
-          return prev.map(t => t.path === path ? { ...t, content } : t);
-        }
-        return [...prev, { path, content }];
-      });
-      setActivePath(path);
-    };
-    socket.on('fileContent', onFile);
-    return () => socket.off('fileContent', onFile);
-  }, [socket]);
+  // We moved receive file content listener to ResizableLayout for persistence
+
 
   // Sync code & cursors
   useEffect(() => {
@@ -178,14 +163,14 @@ export default function EditorContainer({ socket, activePath, setActivePath }) {
       socket.emit('code-change', { roomId, path: activePath, code, token });
 
       // Debounced Auto-save
-      setSaveStatus('unsaved');
+      setSaveStatuses(prev => ({ ...prev, [activePath]: 'unsaved' }));
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       
       saveTimeoutRef.current = setTimeout(() => {
-        setSaveStatus('saving');
+        setSaveStatuses(prev => ({ ...prev, [activePath]: 'saving' }));
         socket.emit('save-file', { roomId, path: activePath, code });
         // Assume saved after a short delay or we could listen for a save-success event
-        setTimeout(() => setSaveStatus('saved'), 1000);
+        setTimeout(() => setSaveStatuses(prev => ({ ...prev, [activePath]: 'saved' })), 1000);
       }, 2000);
     });
 
@@ -206,6 +191,11 @@ export default function EditorContainer({ socket, activePath, setActivePath }) {
       if (activePath === path) setActivePath(nt[0]?.path || null);
       return nt;
     });
+    setSaveStatuses(prev => {
+      const next = { ...prev };
+      delete next[path];
+      return next;
+    });
   };
 
   const saveFile = async () => {
@@ -218,36 +208,45 @@ export default function EditorContainer({ socket, activePath, setActivePath }) {
 
   return (
     <div className="flex flex-col h-full w-full">
-      <div className="flex border-b-2 border-b-dark-2 overflow-x-auto">
-        {tabs.map(tab => (
-          <div
-            key={tab.path}
-            onClick={() => setActivePath(tab.path)}
-            className={`flex items-center px-3 py-1.5 cursor-pointer border-r border-gray-800 transition-colors group ${tab.path === activePath ? 'bg-dark-1 text-white shadow-[inset_0_-2px_0_0_#3b82f6]' : 'text-gray-400 hover:bg-dark-2'}`}
-          >
-            <span className="truncate max-w-[120px] text-xs font-medium">
-              {tab.path?.split('/').pop()}
-            </span>
-            
-            <div className="ml-2 flex items-center justify-center w-5 h-5 rounded-md hover:bg-white/10 transition-colors"
-                 onClick={e => { e.stopPropagation(); handleCloseTab(tab.path); }}>
-              {tab.path === activePath ? (
-                // For active tab, show state-dependent icon
-                saveStatus === 'saved' ? (
-                  <X size={14} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                ) : (
+      <div className="flex bg-dark-2 overflow-x-auto no-scrollbar border-b border-white/5">
+        {tabs.map(tab => {
+          const fileName = tab.path?.split('/').pop();
+          const isActive = tab.path === activePath;
+          const status = saveStatuses[tab.path] || 'saved';
+          
+          return (
+            <div
+              key={tab.path}
+              onClick={() => setActivePath(tab.path)}
+              className={`flex items-center px-3 py-2 cursor-pointer border-r border-white/5 transition-all relative group min-w-[120px] max-w-[200px] ${isActive ? 'bg-dark-4 text-white' : 'text-gray-400 hover:bg-dark-1'}`}
+            >
+              {/* Active indicator bar */}
+              {isActive && <div className="absolute top-0 left-0 right-0 h-[2px] bg-blue-500" />}
+              
+              <img 
+                src={`/icons/${getIconForFile(fileName)}`} 
+                className="w-4 h-4 mr-2" 
+                alt="file-icon"
+              />
+              
+              <span className="truncate text-[12px] font-medium flex-1">
+                {fileName}
+              </span>
+              
+              <div className="ml-2 flex items-center justify-center w-4 h-4 rounded hover:bg-white/10 transition-colors"
+                   onClick={e => { e.stopPropagation(); handleCloseTab(tab.path); }}>
+                {status !== 'saved' ? (
                   <div className="relative flex items-center justify-center">
-                    <div className={`w-2 h-2 rounded-full bg-blue-500 transition-all group-hover:scale-0 group-hover:opacity-0 ${saveStatus === 'saving' ? 'animate-pulse' : ''}`} />
-                    <X size={14} className="absolute inset-0 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className={`w-1.5 h-1.5 rounded-full bg-blue-400 ${status === 'saving' ? 'animate-pulse' : ''}`} />
+                    <X size={12} className="absolute inset-0 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                )
-              ) : (
-                // For inactive tabs, just show X on hover
-                <X size={14} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-              )}
+                ) : (
+                  <X size={12} className={`text-gray-500 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="flex-1">
         {activePath ? (

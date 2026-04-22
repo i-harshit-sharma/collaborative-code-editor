@@ -2,77 +2,138 @@ import { Server } from 'socket.io';
 import terminalHandler from './terminalHandler.js';
 import editorHandler from './editorHandler.js';
 import chatHandler from './chatHandler.js';
-import { jwtDecode } from 'jwt-decode';
+import { verifyToken } from '@clerk/express';
 import { clerkClient } from '../config/clerk.js';
 import { checkAndScheduleShutdown, markVMActive } from './vmMonitor.js';
+import logger from '../utils/logger.js';
 
 const rooms = {};
 let userList = { data: [] };
 
-// Refresh user list every 10 seconds
+// Refresh user list periodically
 setInterval(async () => {
   try {
     userList = await clerkClient.users.getUserList();
   } catch (err) {
-    console.error('Failed to fetch user list:', err);
+    logger.error(`Failed to fetch user list: ${err.message}`);
   }
-}, 10000);
+}, 30000);
 
 export default (server) => {
   const io = new Server(server, {
     cors: {
-      origin: true,
+      origin: [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://localhost:4000"
+      ],
       credentials: true,
+      methods: ["GET", "POST"]
+    },
+    transports: ['polling', 'websocket'], // Ensure both are enabled
+    allowEio3: true // Support for older clients if any
+  });
+
+  // Middleware: Strict validation at handshake
+  io.use(async (socket, next) => {
+    const token = socket.handshake.auth.token || socket.handshake.query.token;
+    
+    if (!token) {
+      logger.warn(`❌ Connection rejected for socket ${socket.id}: No token provided`);
+      return next(new Error('Authentication error: Token required'));
+    }
+
+    try {
+      const secretKey = process.env.CLERK_SECRET_KEY;
+      if (!secretKey) {
+        logger.error('❌ CLERK_SECRET_KEY is missing in environment variables');
+        return next(new Error('Internal server error'));
+      }
+
+      const verifiedToken = await verifyToken(token, {
+        secretKey: secretKey,
+      });
+
+      if (!verifiedToken) {
+        throw new Error('Verification returned null');
+      }
+
+      socket.data.userId = verifiedToken.sub;
+      socket.data.exp = verifiedToken.exp;
+      socket.data.token = token;
+
+      // Pre-fetch user info using ID
+      try {
+        const user = userList?.data?.find(u => u.id === verifiedToken.sub) || 
+                     await clerkClient.users.getUser(verifiedToken.sub);
+        socket.data.username = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : verifiedToken.sub;
+      } catch (userErr) {
+        logger.warn(`Could not fetch full user info: ${userErr.message}`);
+        socket.data.username = verifiedToken.sub;
+      }
+      
+      logger.success(`✅ Socket ${socket.id} authenticated for user ${socket.data.username}`);
+      next();
+    } catch (err) {
+      logger.error(`❌ Socket authentication failed for ${socket.id}: ${err.message}`);
+      next(new Error('Authentication error: Invalid or expired token'));
     }
   });
 
   io.on('connection', (socket) => {
-    console.log('🔌 Socket connected:', socket.id);
+    logger.info(`🔌 Socket connected: ${socket.id}`);
     
+    // Strict validation throughout the session: Check token on every event
+    socket.use((packet, next) => {
+      const now = Math.floor(Date.now() / 1000);
+      if (socket.data.exp && now >= socket.data.exp) {
+        logger.warn(`⚠️ Token expired for socket ${socket.id}. Disconnecting.`);
+        socket.emit('error', 'Session expired. Please re-authenticate.');
+        socket.disconnect(true);
+        return next(new Error('Session expired'));
+      }
+      next();
+    });
+
+    // Handle token updates from client
+    socket.on('authenticate', async ({ token }) => {
+      try {
+        const verifiedToken = await verifyToken(token, {
+          secretKey: process.env.CLERK_SECRET_KEY,
+        });
+        socket.data.userId = verifiedToken.sub;
+        socket.data.exp = verifiedToken.exp;
+        socket.data.token = token;
+        logger.info(`🔄 Token refreshed for user: ${socket.data.userId}`);
+      } catch (err) {
+        logger.error(`❌ Re-authentication failed: ${err.message}`);
+        socket.disconnect(true);
+      }
+    });
+
     // Initial signal
-    socket.emit('sendToken', 'Send token');
     socket.emit('filesReady', 'files are ready to be read');
 
     // Centralized Room Joining
-    socket.on('join-room', async ({ token, roomId }) => {
+    socket.on('join-room', async ({ roomId }) => {
+      if (!roomId) return;
+      
       socket.join(roomId);
       markVMActive(roomId);
-      console.log(`📡 Socket ${socket.id} joined room ${roomId}`);
+      logger.info(`📡 Socket ${socket.id} (${socket.data.username}) joined room ${roomId}`);
 
       if (!rooms[roomId]) rooms[roomId] = {};
-
-      if (token) {
-        try {
-          const payload = jwtDecode(token);
-          const userId = payload.sub;
-          socket.data.userId = userId;
-
-          // Attempt to resolve username from the pre-fetched userList
-          const user = userList.data.find(u => u.id === userId);
-          if (user) {
-            socket.data.username = `${user.firstName} ${user.lastName}`;
-          } else {
-            // Fallback: Fetch specific user if not in list
-            const fetchedUser = await clerkClient.users.getUser(userId);
-            socket.data.username = `${fetchedUser.firstName} ${fetchedUser.lastName}`;
-          }
-          
-          socket.to(roomId).emit('user-joined', { username: socket.data.username || userId });
-          console.log(`👤 User ${socket.data.username} identified for socket ${socket.id}`);
-        } catch (err) {
-          console.error('❌ Failed to identify user in join-room:', err);
-        }
-      }
+      
+      socket.to(roomId).emit('user-joined', { username: socket.data.username });
     });
 
     // Detect when user is leaving rooms
     socket.on('disconnecting', () => {
       const rooms = Array.from(socket.rooms);
-      // Filter out the socket's own ID room
       const vmRooms = rooms.filter(r => r !== socket.id);
       
       vmRooms.forEach(roomId => {
-        // Use setImmediate to check after the socket has actually left
         setImmediate(() => {
           checkAndScheduleShutdown(io, roomId);
         });
@@ -80,7 +141,7 @@ export default (server) => {
     });
 
     socket.on('disconnect', () => {
-      console.log('🔌 Socket disconnected:', socket.id);
+      logger.info(`🔌 Socket disconnected: ${socket.id}`);
     });
 
     // Register handlers

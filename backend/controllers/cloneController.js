@@ -1,18 +1,13 @@
 import docker from '../config/docker.js';
 import User from '../models/User.js';
-import { jwtDecode } from 'jwt-decode';
+import logger from '../utils/logger.js';
 
 export const cloneRepo = async (req, res) => {
   let language = 'python';
   let type = 'public';
   const { url, repoName } = req.body;
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized - No token found' });
-  }
-
-  const token = authHeader.split(' ')[1];
-  const payload = jwtDecode(token);
+  const authId = req.authId;
+  let user = req.user;
 
   const volumeName = "repos_data";
 
@@ -46,21 +41,19 @@ export const cloneRepo = async (req, res) => {
     await container.start();
     await container.wait();
 
-    const user = await User.findOne({ userId: payload.sub });
     if (!user) {
-      const newUser = new User({ userId: payload.sub, repos: [] });
-      await newUser.save();
-      newUser.repos.push({ repoName, language, type, vmId: container.id, sharedUsers: [] });
-      newUser.repos[0].sharedUsers.push({ userId: payload.sub, role: 'Owner' });
-      await newUser.save();
-    } else {
-      user.repos.push({ repoName, language, type, vmId: container.id, sharedUsers: [] });
-      user.repos[user.repos.length - 1].sharedUsers.push({ userId: payload.sub, role: 'Owner' });
-      await user.save();
+      user = new User({ userId: authId, repos: [] });
     }
+    
+    user.repos.push({ repoName, language, type, vmId: container.id, sharedUsers: [] });
+    user.repos[user.repos.length - 1].sharedUsers.push({ userId: authId, role: 'Owner' });
+    await user.save();
+    
+    logger.success(`🚀 Repository successfully cloned: ${repoName} from ${url}`);
+    
     res.json({ message: "Repository successfully cloned into Docker volume." });
   } catch (err) {
-    console.error("Clone error:", err);
+    logger.error(`Clone error for ${url}: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 };

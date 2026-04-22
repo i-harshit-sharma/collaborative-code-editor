@@ -1,41 +1,25 @@
 import User from '../models/User.js';
-import { jwtDecode } from 'jwt-decode';
 import { createContainerFromImages } from '../services/dockerService.js';
 import { getSharedUserIdsByVmId } from '../services/repoService.js';
 import { initializeVM } from '../services/containerInitService.js';
 import { vmTemplates } from '../config/vmTemplates.js';
+import logger from '../utils/logger.js';
 
 export const getRepos = async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized - No token found' });
+  const user = req.user;
+  
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
   }
 
-  const token = authHeader.split(' ')[1];
-  const payload = jwtDecode(token);
-
-  User.findOne({ userId: payload.sub })
-    .then((user) => {
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      res.json(user.repos);
-    })
-    .catch((err) => {
-      console.log(err);
-      res.status(500).json({ error: 'Internal server error' });
-    });
+  res.json(user.repos);
 };
 
 export const createRepo = async (req, res) => {
   const { repoName, language, type } = req.body;
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized - No token found' });
-  }
+  const userId = req.authId; // Provided by authMiddleware
+  let user = req.user;
 
-  const token = authHeader.split(' ')[1];
-  const payload = jwtDecode(token);
   let containerId = null;
 
   const imageConfig = vmTemplates[language];
@@ -48,22 +32,18 @@ export const createRepo = async (req, res) => {
   }
 
   try {
-    // We pass a simplified imageList to createContainerFromImages
-    // or just modify createContainerFromImages to accept a single string if that's easier.
-    // For now, let's stick to the current signature or slightly adapt it.
     containerId = await createContainerFromImages([{ [language]: imageName }], language);
   } catch (err) {
-    console.error('Failed to create container:', err.message);
+    logger.error(`Failed to create container: ${err.message}`);
     return res.status(500).json({ error: 'Failed to provision VM: ' + err.message });
   }
 
   // Trigger background initialization
-  initializeVM(containerId).catch(err => console.error('Init trigger error:', err));
+  initializeVM(containerId).catch(err => logger.error(`Init trigger error: ${err.message}`));
 
   try {
-    let user = await User.findOne({ userId: payload.sub });
     if (!user) {
-      user = new User({ userId: payload.sub, repos: [] });
+      user = new User({ userId: userId, repos: [] });
     }
 
     const newRepo = {
@@ -71,11 +51,13 @@ export const createRepo = async (req, res) => {
       language,
       type: type === 'public' ? 'Public' : 'Private', // Normalize case
       vmId: containerId,
-      sharedUsers: [{ userId: payload.sub, role: 'Owner' }]
+      sharedUsers: [{ userId: userId, role: 'Owner' }]
     };
 
     user.repos.push(newRepo);
     await user.save();
+    
+    logger.success(`📁 Repository created: ${repoName} (VM: ${containerId})`);
 
     // Find the newly pushed repo to get its _id and full object
     const createdRepo = user.repos[user.repos.length - 1];
@@ -85,22 +67,15 @@ export const createRepo = async (req, res) => {
       repo: createdRepo
     });
   } catch (err) {
-    console.error('Database error:', err);
+    logger.error(`Database error during repo creation: ${err.message}`);
     res.status(500).json({ error: 'Failed to save repository to database' });
   }
 };
 
 export const deleteRepo = async (req, res) => {
   const { id } = req.params;
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized - No token found' });
-  }
+  const user = req.user;
 
-  const token = authHeader.split(' ')[1];
-  const payload = jwtDecode(token);
-
-  const user = await User.findOne({ userId: payload.sub });
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
@@ -112,16 +87,8 @@ export const deleteRepo = async (req, res) => {
 export const editRepo = async (req, res) => {
   try {
     const { id, obj } = req.body;
-    const authHeader = req.headers.authorization;
+    const user = req.user;
 
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized - No token found' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const payload = jwtDecode(token);
-
-    const user = await User.findOne({ userId: payload.sub });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -138,31 +105,24 @@ export const editRepo = async (req, res) => {
     await user.save();
     res.json({ message: 'Repository edited successfully', user });
   } catch (error) {
-    console.error('Edit repo error:', error);
+    logger.error(`Edit repo error: ${error.message}`);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
 
 export const checkRepo = async (req, res) => {
   const { id } = req.params;
-  const authHeader = req.headers.authorization;
+  const user = req.user;
+  const authId = req.authId;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized - No token found' });
-  }
-
-  const token = authHeader.split(' ')[1];
-  const payload = jwtDecode(token);
-
-  const user = await User.findOne({ userId: payload.sub });
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
 
   const users = await getSharedUserIdsByVmId(id);
-  if (users.find(user => user === payload.sub)) {
+  if (users.find(uId => uId === authId)) {
     // Ensure VM is initialized when user enters
-    initializeVM(id).catch(err => console.error('Init trigger error:', err));
+    initializeVM(id).catch(err => logger.error(`Init trigger error: ${err.message}`));
     return res.status(200).json({ message: 'User has access' });
   }
 
@@ -194,7 +154,7 @@ export const getVmMetadata = async (req, res) => {
       defaultPorts: template.ports || [3000, 5000, 8000, 8080]
     });
   } catch (err) {
-    console.error('Failed to get VM metadata:', err);
+    logger.error(`Failed to get VM metadata for ${vmId}: ${err.message}`);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

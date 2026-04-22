@@ -1,5 +1,6 @@
 import httpProxy from 'http-proxy';
 import docker, { isRunningInDocker } from '../config/docker.js';
+import logger from '../utils/logger.js';
 
 const proxy = httpProxy.createProxyServer({});
 
@@ -23,7 +24,7 @@ const getProxyTarget = (info, port) => {
     }
 
     if (!containerIp) {
-      console.warn(`No IP address found for container ${info.Id} on any network.`);
+      logger.warn(`No IP address found for container ${info.Id} on any network.`);
       return null;
     }
 
@@ -43,7 +44,7 @@ proxy.on('error', (err, req, res) => {
   // we don't want to send another response here.
   if (res && res.headersSent) return;
 
-  console.error('Proxy Error:', err.message);
+  logger.error(`Proxy Error: ${err.message}`);
   
   if (res && res.writeHead) {
     let status = 502;
@@ -82,7 +83,7 @@ export const handlePortProxy = async (req, res) => {
     const target = getProxyTarget(info, port);
     
     if (!target) {
-      console.error(`Could not determine target for container ${vmId} on port ${port}`);
+      logger.error(`Could not determine target for container ${vmId} on port ${port}`);
       return res.status(404).json({ 
         error: 'Target unreachable', 
         message: `The port ${port} is not accessible. If running in Docker, ensure the containers are on the same network.`
@@ -100,7 +101,7 @@ export const handlePortProxy = async (req, res) => {
     req.url = newPath || '/';
     
     // Log the proxy action
-    console.log(`🌐 Proxying ${req.method} ${req.url} -> ${target}`);
+    logger.info(`🌐 Proxying ${req.method} ${req.url} -> ${target}`);
 
     // Implement a simple retry mechanism for initial connections
     const proxyRequest = (attempt = 0) => {
@@ -113,7 +114,7 @@ export const handlePortProxy = async (req, res) => {
         const isRetryable = err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT';
         if (isRetryable && attempt < 3) {
           const delay = 1000 * (attempt + 1);
-          console.log(`♻️  Retry ${attempt + 1}/3 for ${target} in ${delay}ms...`);
+          logger.warn(`♻️ Retry ${attempt + 1}/3 for ${target} in ${delay}ms...`);
           setTimeout(() => proxyRequest(attempt + 1), delay);
         } else {
           // If we reach here, let the global error handler take it
@@ -128,7 +129,7 @@ export const handlePortProxy = async (req, res) => {
     proxyRequest();
 
   } catch (err) {
-    console.error('Proxy Setup Error:', err.message);
+    logger.error(`Proxy Setup Error: ${err.message}`);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Internal Proxy Error', message: err.message });
     }
@@ -158,7 +159,7 @@ export const handlePortProxyUpgrade = async (req, socket, head) => {
       req.url = req.url.startsWith(prefix) ? req.url.slice(prefix.length) : req.url;
       if (!req.url) req.url = '/';
 
-      console.log(`🔌 Proxying WS Upgrade ${req.url} -> ${target}`);
+      logger.info(`🔌 Proxying WS Upgrade ${req.url} -> ${target}`);
 
       proxy.ws(req, socket, head, { 
         target,
@@ -167,7 +168,7 @@ export const handlePortProxyUpgrade = async (req, socket, head) => {
       });
     }
   } catch (err) {
-    console.error('Proxy WS Upgrade Error:', err.message);
+    logger.error(`Proxy WS Upgrade Error: ${err.message}`);
     socket.destroy();
   }
 };

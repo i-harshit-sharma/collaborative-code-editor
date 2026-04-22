@@ -1,6 +1,7 @@
 import docker from '../config/docker.js';
 import { exec } from 'child_process';
 import util from 'util';
+import logger from '../utils/logger.js';
 
 const execPromise = util.promisify(exec);
 
@@ -15,7 +16,7 @@ export const initializeVM = async (containerId) => {
     // 1. Ensure container is running
     const info = await container.inspect();
     if (!info.State.Running) {
-      console.log(`🚀 Starting stopped VM ${containerId}...`);
+      logger.info(`🚀 Starting stopped VM ${containerId}...`);
       await container.start();
     }
     
@@ -36,12 +37,12 @@ export const initializeVM = async (containerId) => {
     
     const { ExitCode } = await checkExec.inspect();
     if (ExitCode === 0) {
-      console.log(`ℹ️ VM ${containerId} already initialized.`);
+      logger.info(`ℹ️ VM ${containerId} already initialized.`);
       return;
     }
 
     // 3. Perform background setup
-    console.log(`🚀 Initializing VM ${containerId} in background...`);
+    logger.info(`🚀 Initializing VM ${containerId} in background...`);
     const initScript = `
       # Create initialized marker
       touch /.initialized && \
@@ -57,9 +58,9 @@ export const initializeVM = async (containerId) => {
     });
 
     await execInstance.start();
-    console.log(`✅ Background initialization triggered for VM ${containerId}`);
+    logger.success(`✅ Background initialization triggered for VM ${containerId}`);
 
   } catch (err) {
-    console.error(`❌ VM initialization failed for ${containerId}:`, err.message);
+    logger.error(`❌ VM initialization failed for ${containerId}: ${err.message}`);
   }
 };

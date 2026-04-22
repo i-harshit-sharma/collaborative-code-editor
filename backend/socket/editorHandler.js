@@ -1,8 +1,8 @@
 import { exec, spawn } from 'child_process';
 import path from 'path';
-import { jwtDecode } from 'jwt-decode';
 import { clerkClient } from '../config/clerk.js';
 import { markVMActive } from './vmMonitor.js';
+import logger from '../utils/logger.js';
 
 export default (io, socket, rooms, userList) => {
   socket.on('getFiles', (data) => {
@@ -13,7 +13,7 @@ export default (io, socket, rooms, userList) => {
     
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
-        console.error('getFiles error:', stderr);
+        logger.error(`getFiles error for VM ${data.id}: ${stderr || error.message}`);
         return socket.emit('files', { error: stderr });
       }
 
@@ -38,9 +38,11 @@ export default (io, socket, rooms, userList) => {
   socket.on('deleteFile', (data) => {
     if (data.id) markVMActive(data.id);
     const cmd = `docker exec ${data.id} rm -rf ${data.path}`;
+    logger.info(`🗑️ Deleting file ${data.path} in VM ${data.id}`);
     socket.emit("filesReady", 'files are ready to be read');
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
+        logger.error(`deleteFile error: ${stderr || error.message}`);
         return socket.emit('fileContent', { error: stderr });
       }
       socket.emit('fileContent', { content: stdout, path: data.path });
@@ -52,8 +54,12 @@ export default (io, socket, rooms, userList) => {
     const dir = path.posix.dirname(oldPath);
     const newPath = path.posix.join(dir, newName);
     const cmd = `docker exec ${id} mv "${oldPath}" "${newPath}"`;
+    logger.info(`📝 Renaming ${oldPath} to ${newName} in VM ${id}`);
     exec(cmd, (err, stdout, stderr) => {
-      if (err) return socket.emit('renameError', { error: stderr });
+      if (err) {
+        logger.error(`renameFile error: ${stderr || err.message}`);
+        return socket.emit('renameError', { error: stderr });
+      }
       socket.emit("filesReady", 'files are ready to be read');
     });
   });
@@ -61,8 +67,12 @@ export default (io, socket, rooms, userList) => {
   socket.on('createFile', ({ id, path: filePath }) => {
     if (id) markVMActive(id);
     const cmd = `docker exec ${id} touch "${filePath}"`;
+    logger.info(`📄 Creating file ${filePath} in VM ${id}`);
     exec(cmd, (err, stdout, stderr) => {
-      if (err) return socket.emit('createError', { error: stderr });
+      if (err) {
+        logger.error(`createFile error: ${stderr || err.message}`);
+        return socket.emit('createError', { error: stderr });
+      }
       socket.emit("filesReady", 'files are ready to be read');
     });
   });
@@ -70,8 +80,12 @@ export default (io, socket, rooms, userList) => {
   socket.on('createFolder', ({ id, path: folderPath }) => {
     if (id) markVMActive(id);
     const cmd = `docker exec ${id} mkdir -p "${folderPath}"`;
+    logger.info(`📁 Creating folder ${folderPath} in VM ${id}`);
     exec(cmd, (err, stdout, stderr) => {
-      if (err) return socket.emit('createError', { error: stderr });
+      if (err) {
+        logger.error(`createFolder error: ${stderr || err.message}`);
+        return socket.emit('createError', { error: stderr });
+      }
       socket.emit("filesReady", 'files are ready to be read');
     });
   });
@@ -83,12 +97,15 @@ export default (io, socket, rooms, userList) => {
     proc.stdin.write(code);
     proc.stdin.end();
     proc.on('error', (err) => {
+      logger.error(`save-file error for ${filePath} in ${roomId}: ${err.message}`);
       socket.emit('saveError', { error: err.message });
     });
     proc.on('close', (exitCode) => {
       if (exitCode === 0) {
+        logger.success(`💾 File saved: ${filePath} in ${roomId}`);
         socket.emit('saveSuccess', { path: filePath });
       } else {
+        logger.error(`save-file tee error (code ${exitCode}) for ${filePath}`);
         socket.emit('saveError', { error: `tee exited with code ${exitCode}` });
       }
     });

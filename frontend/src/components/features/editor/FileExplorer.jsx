@@ -219,8 +219,23 @@ export default function FileExplorer({ data: initialData, width, socket, activeP
     setNewName("");
   };
 
+  const containerRef = useRef(null);
+  const [treeHeight, setTreeHeight] = useState(700);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        // Adjust for the header height (approx 35px) and optional creation input
+        setTreeHeight(entry.contentRect.height - 40 - (isCreating ? 50 : 0));
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [isCreating]);
+
   return (
-    <div style={{ display: "flex", height: "100%" }} className="flex-col bg-dark-3">
+    <div ref={containerRef} style={{ display: "flex", height: "100%" }} className="flex-col bg-dark-3 w-full">
       <div className="flex bg-dark-2 py-1.5 border-b border-gray-800 text-gray-400 px-3 items-center justify-between group/header">
         <span className="text-[11px] font-bold uppercase tracking-wider">Explorer</span>
         <div className="flex gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity">
@@ -256,26 +271,32 @@ export default function FileExplorer({ data: initialData, width, socket, activeP
         </div>
       )}
 
-      <Tree
-        data={data}
-        ref={treeRef}
-        selection={activePath}
-        onMove={handleMove}
-        childrenAccessor="children"
-        height={725}
-        rowHeight={30}
-        width={width}
-      >
-        {(props) => (
-          <FileNode
-            {...props}
-            onOpenFile={handleOpenFile}
-            onDelete={handleDelete}
-            onRename={handleRename}
-            onSelect={handleSelect}
-          />
-        )}
-      </Tree>
+      {data && data.length > 0 ? (
+        <Tree
+          data={data}
+          ref={treeRef}
+          selection={activePath}
+          onMove={handleMove}
+          childrenAccessor="children"
+          height={treeHeight}
+          rowHeight={30}
+          width={width}
+        >
+          {(props) => (
+            <FileNode
+              {...props}
+              onOpenFile={handleOpenFile}
+              onDelete={handleDelete}
+              onRename={handleRename}
+              onSelect={handleSelect}
+            />
+          )}
+        </Tree>
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm italic p-4 text-center">
+          Project directory is empty
+        </div>
+      )}
     </div>
   );
 }

@@ -1,40 +1,39 @@
-import { jwtDecode } from 'jwt-decode';
 import docker from '../config/docker.js';
 import pty from '@lydell/node-pty';
 import { randomBytes } from 'crypto';
 import User from '../models/User.js';
+import logger from '../utils/logger.js';
 
 export default (io, socket) => {
   const ptyProcesses = new Map();
 
-  socket.on('sendToken', async ({ token, containerId, terminalId }) => {
-    console.log('Received containerId:', containerId, 'terminalId:', terminalId);
+  socket.on('sendToken', async ({ containerId, terminalId }) => {
+    logger.debug(`Terminal token received: container=${containerId}, terminal=${terminalId}`);
 
     if (!terminalId) {
-      console.error('Missing terminalId in sendToken');
+      logger.error('Missing terminalId in sendToken');
       return;
     }
 
-    let payload;
-    try {
-      payload = jwtDecode(token);
-    } catch (err) {
-      console.error('Invalid token:', err);
-      socket.emit('output', { terminalId, data: 'Error: Invalid token.\r\n' });
+    const userId = socket.data.userId;
+    if (!userId) {
+      logger.error(`Unauthorized terminal access attempt by socket ${socket.id}`);
+      socket.emit('output', { terminalId, data: 'Error: Unauthorized.\r\n' });
       return;
     }
 
     let user;
     try {
-      user = await User.findOne({ userId: payload.sub });
+      user = await User.findOne({ userId });
     } catch (err) {
-      console.error('Database lookup error:', err);
+      logger.error(`Database lookup error for user ${userId}: ${err.message}`);
       socket.emit('output', { terminalId, data: 'Error: Database error.\r\n' });
       return;
     }
+    
     if (!user) {
-      console.error('User not found in DB:', payload.sub);
-      socket.emit('output', { terminalId, data: 'Error: User not found.\r\n' });
+      logger.error(`User profile not found in DB for ID: ${userId}`);
+      socket.emit('output', { terminalId, data: 'Error: User profile not found.\r\n' });
       return;
     }
 
@@ -44,10 +43,10 @@ export default (io, socket) => {
       const info = await container.inspect();
       if (!info.State.Running) {
         await container.start();
-        console.log('Started existing container:', containerIdOrName);
+        logger.info(`🚀 Started existing container: ${containerIdOrName}`);
       }
     } catch (err) {
-      console.log('Container not found or not running, creating a new one');
+      logger.info(`ℹ️ Container ${containerIdOrName} not found or not running, creating a new one`);
       try {
         container = await docker.createContainer({
           Image: 'ubuntu',
@@ -57,9 +56,9 @@ export default (io, socket) => {
         });
         await container.start();
         containerIdOrName = container.id;
-        console.log('✅ New container started:', containerIdOrName);
+        logger.success(`✅ New container started: ${containerIdOrName}`);
       } catch (createErr) {
-        console.error('❌ Failed to create or start container:', createErr);
+        logger.error(`❌ Failed to create or start container: ${createErr.message}`);
         socket.emit('output', { terminalId, data: 'Error: Failed to create or start new container.\r\n' });
         return;
       }
@@ -78,7 +77,7 @@ export default (io, socket) => {
       env: process.env,
     });
 
-    console.log(`🔥 PTY session started for terminal: ${terminalId} in container: ${containerIdOrName}`);
+    logger.info(`🔥 PTY session started for terminal: ${terminalId} (User: ${socket.data.username})`);
 
     ptyProcesses.set(terminalId, ptyProcess);
 
@@ -97,7 +96,7 @@ export default (io, socket) => {
       try {
         ptyProcess.write(data);
       } catch (err) {
-        console.error(`Error writing to PTY ${terminalId}:`, err);
+        logger.error(`Error writing to PTY ${terminalId}: ${err.message}`);
       }
     }
   });
@@ -108,7 +107,7 @@ export default (io, socket) => {
       try {
         ptyProcess.resize(cols, rows);
       } catch (err) {
-        console.error(`Error resizing PTY ${terminalId}:`, err);
+        logger.error(`Error resizing PTY ${terminalId}: ${err.message}`);
       }
     }
   });
@@ -119,7 +118,7 @@ export default (io, socket) => {
       try {
         ptyProcess.resize(cols, rows);
       } catch (err) {
-        console.error(`Error resizing PTY ${terminalId}:`, err);
+        logger.error(`Error resizing PTY ${terminalId}: ${err.message}`);
       }
     }
   });
@@ -127,17 +126,19 @@ export default (io, socket) => {
   socket.on('closeTerminal', ({ terminalId }) => {
     const ptyProcess = ptyProcesses.get(terminalId);
     if (ptyProcess) {
-      console.log(`Closing terminal session: ${terminalId}`);
+      logger.info(`🚪 Closing terminal session: ${terminalId}`);
       ptyProcess.kill();
       ptyProcesses.delete(terminalId);
     }
   });
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected, cleaning up terminals for socket:', socket.id);
-    ptyProcesses.forEach((ptyProcess, terminalId) => {
-      ptyProcess.kill();
-    });
-    ptyProcesses.clear();
+    if (ptyProcesses.size > 0) {
+      logger.info(`🧹 Cleanup: Closing ${ptyProcesses.size} terminal sessions for socket: ${socket.id}`);
+      ptyProcesses.forEach((ptyProcess, terminalId) => {
+        ptyProcess.kill();
+      });
+      ptyProcesses.clear();
+    }
   });
 };

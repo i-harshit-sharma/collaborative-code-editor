@@ -1,5 +1,6 @@
 import docker from '../config/docker.js';
 import { PassThrough } from 'stream';
+import logger from '../utils/logger.js';
 
 export const executeCode = async (req, res) => {
   const { language, sourceCode } = req.body;
@@ -37,6 +38,8 @@ export const executeCode = async (req, res) => {
       memory: 512 * 1024 * 1024
     }
   };
+  
+  logger.info(`⚡ Executing ${language} code...`);
 
   const spec = specs[language];
   if (!spec) return res.status(400).json({ error: 'Unsupported language' });
@@ -92,14 +95,14 @@ export const executeCode = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Execution error:', error.message);
+    logger.error(`Execution error: ${error.message}`);
 
     if (error.message === 'Execution timed out' && container) {
       try {
         await container.kill();
       } catch (killError) {
         if (killError.statusCode !== 404) {
-          console.error("Failed to kill container:", killError.message);
+          logger.error(`Failed to kill container: ${killError.message}`);
         }
       }
     }

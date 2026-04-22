@@ -11,19 +11,20 @@ import docker from '../config/docker.js';
 import { executionImages } from '../config/executionImages.js';
 import searchRoutes from './searchRoutes.js';
 import uploadRoutes from './uploadRoutes.js';
+import { authenticateUser } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 export default (io) => {
   // Public routes
   router.use('/api', executeRoutes);
-  router.use('/api', cloneRoutes);
+  router.use('/api', clerkMiddleware(), authenticateUser, cloneRoutes);
   router.use('/', searchRoutes);
   router.use('/', uploadRoutes(io));
 
   // Protected routes
-  router.use('/protected', clerkMiddleware(), repoRoutes);
-  router.use('/protected', clerkMiddleware(), shareRoutes);
+  router.use('/protected', clerkMiddleware(), authenticateUser, repoRoutes);
+  router.use('/protected', clerkMiddleware(), authenticateUser, shareRoutes);
   
   // Public VM user list (extracted from share routes logic)
   router.use('/vm', shareRoutes); 

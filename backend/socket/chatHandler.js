@@ -1,4 +1,3 @@
-import { jwtDecode } from 'jwt-decode';
 import { markVMActive } from './vmMonitor.js';
 
 export default (io, socket, rooms) => {

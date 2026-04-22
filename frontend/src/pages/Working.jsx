@@ -156,8 +156,7 @@ export default function Working() {
       term.open(containerRef.current);
       fit.fit();
 
-      const token = await getToken();
-      socketRef.current.emit('sendToken', { token, containerId, terminalId: termId });
+      socketRef.current.emit('sendToken', { containerId, terminalId: termId });
 
       // Only emit input for the currently selected terminal
       term.onData(data => {
@@ -177,24 +176,38 @@ export default function Working() {
 
   // Setup socket once, and create initial terminal
   useEffect(() => {
-    socketRef.current = io(import.meta.env.VITE_API_BASE_URL);
+    let refreshInterval;
 
-    socketRef.current.on('output', ({ terminalId, data }) => {
-      const entry = terminalsRef.current[terminalId];
-      if (entry) entry.term.write(data);
-    });
+    const setup = async () => {
+      const token = await getToken();
+      socketRef.current = io(import.meta.env.VITE_API_BASE_URL, {
+        auth: { token }
+      });
 
-    // Create one terminal on mount
-    addTerminal();
+      socketRef.current.on('output', ({ terminalId, data }) => {
+        const entry = terminalsRef.current[terminalId];
+        if (entry) entry.term.write(data);
+      });
+
+      // Keep token fresh
+      refreshInterval = setInterval(async () => {
+        const newToken = await getToken({ skipCache: true });
+        socketRef.current.emit('authenticate', { token: newToken });
+      }, 45000);
+
+      // Create one terminal on mount
+      addTerminal();
+    };
+
+    setup();
 
     return () => {
-      socketRef.current.disconnect();
-      // Dispose all resize listeners
+      if (refreshInterval) clearInterval(refreshInterval);
+      socketRef.current?.disconnect();
       Object.values(terminalsRef.current).forEach(entry => entry.dispose && entry.dispose());
     };
   }, []);
 
-  // Close and remove terminal
   const closeTerminal = id => {
     const entry = terminalsRef.current[id];
     if (entry) {

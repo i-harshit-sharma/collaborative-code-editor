@@ -1,22 +1,14 @@
 import User from '../models/User.js';
-import { jwtDecode } from 'jwt-decode';
 import { clerkClient } from '../config/clerk.js';
 import { getSharedReposForUser } from '../services/repoService.js';
+import logger from '../utils/logger.js';
 
 export const shareRepo = async (req, res) => {
   try {
     const { id, obj } = req.body;
     const userList = await clerkClient.users.getUserList({ emailAddress: obj.email });
-    const authHeader = req.headers.authorization;
+    const user = req.user;
 
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized - No token found' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const payload = jwtDecode(token);
-
-    const user = await User.findOne({ userId: payload.sub });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -40,26 +32,21 @@ export const shareRepo = async (req, res) => {
     }
     repo.sharedUsers.push({ userId: userId, role: obj.role });
     await user.save();
+    
+    logger.success(`🔗 Repository ${id} shared with ${obj.email} (Role: ${obj.role})`);
+    
     res.json(repo);
   } catch (error) {
-    console.log(error.message);
+    logger.error(`Share repo error: ${error.message}`);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
 
 export const getSharedUsers = async (req, res) => {
   const { id } = req.params;
-  const authHeader = req.headers.authorization;
   const userList = await clerkClient.users.getUserList();
+  const user = req.user;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized - No token found' });
-  }
-
-  const token = authHeader.split(' ')[1];
-  const payload = jwtDecode(token);
-
-  const user = await User.findOne({ userId: payload.sub });
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
@@ -100,6 +87,7 @@ export const getSharedUsersByVmId = async (req, res) => {
       if (user) {
         users.push({ 
           name: user.firstName + " " + user.lastName, 
+          email: user.emailAddresses[0]?.emailAddress,
           role: sharedUser.role, 
           img: user.imageUrl 
         });
@@ -107,25 +95,18 @@ export const getSharedUsersByVmId = async (req, res) => {
     }
     return res.json({ users });
   } catch (err) {
-    console.error('Error fetching sharedUsers:', err);
+    logger.error(`Error fetching sharedUsers for VM ${vmId}: ${err.message}`);
     return res.status(500).json({ message: 'Server error' });
   }
 };
 
 export const getSharedRepos = async (req, res) => {
-  const authHeader = req.headers.authorization;
+  const authId = req.authId;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized - No token found' });
-  }
-
-  const token = authHeader.split(' ')[1];
-  const payload = jwtDecode(token);
-
-  const repos = await getSharedReposForUser(payload.sub);
+  const repos = await getSharedReposForUser(authId);
   if (!repos) {
     return res.status(404).json({ error: 'No shared repos found' });
   }
 
-  res.json(repos.filter(repo => repo.owner !== payload.sub));
+  res.json(repos.filter(repo => repo.owner !== authId));
 };

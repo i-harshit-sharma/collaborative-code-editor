@@ -95,13 +95,14 @@ function getTimeAgo(date) {
 
 const SearchResults = ({ icon, title, description, lnk }) => {
     return (
-        <Link to={lnk} className='group flex flex-start hover:bg-dark-2 py-1.5 items-center gap-2 px-2 border-t-2 border-t-dark-2/40 cursor-pointer w-full'>
-            <div className='flex min-w-fit justify-center items-center bg-dark-2 group-hover:bg-[#063b72] px-2 py-1 rounded gap-1 transition-colors'>
-                <span>{icon}</span>
-                <span className='text-sm select-none'>{title}</span>
+        <Link to={lnk} className='group flex items-center gap-3 p-3 hover:bg-white/5 transition-colors border-t border-white/5'>
+            <div className='flex h-8 w-8 items-center justify-center rounded-lg bg-dark-2 text-primary group-hover:bg-primary group-hover:text-white transition-all transform group-hover:scale-110'>
+                {icon}
             </div>
-            <div className='text-nowrap text-xs overflow-hidden select-none'>{description}</div>
-            {/* {lnk && <Link to={lnk} className=''>{lnk}</Link>} */}
+            <div className='flex flex-col min-w-0'>
+                <span className='text-sm font-medium text-white truncate'>{title}</span>
+                <span className='text-xs text-gray-500 truncate'>{description}</span>
+            </div>
         </Link>
     );
 };
@@ -191,25 +192,19 @@ const Navbar = ({
 
 
     return (
-        <div className='relative h-12 border-b-1 border-b-dark-2 top-0 w-full flex justify-between items-center pr-4 '>
+        <div className='sticky top-0 z-50 glass h-14 w-full flex justify-between items-center px-6 border-b border-white/5'>
             <div className='h-full flex items-center gap-2 cursor-pointer'>
-                {/* <OrgDropDown isOpen={isOpen} /> */}
-                {/* {isOpen ?
-                    <PanelLeftClose size={28} className="p-1.5 hover:bg-dark-1 rounded" onClick={toggleNavbar} /> :
-                    <PanelLeftOpen size={28} className="p-1.5 hover:bg-dark-1 rounded" onClick={toggleNavbar} />
-                } */}
-                <p className='text-xl font-bold ml-2'>Code Collab</p>
+                <p className='text-xl font-bold tracking-tight bg-gradient-to-br from-white to-white/60 bg-clip-text text-transparent'>Code Collab</p>
             </div>
-            <div className=' border-1 border-dark-2 absolute top-2 left-1/2 transform -translate-x-1/2 bg-dark-4 rounded-sm lg:w-[530px] flex flex-col'
+            <div className='absolute left-1/2 transform -translate-x-1/2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl lg:w-[500px] flex flex-col transition-all duration-300'
                 ref={containerRef}>
-                <div className='flex items-center gap-2 w-full h-full px-2'>
-                    <Search size={20} />
-                    <input type="text" ref={SearchInput} className='w-full h-full bg-transparent border-none outline-none text-gray-300 placeholder:text-gray-300 text-sm hover:text-gray-50' placeholder='Search...' onChange={(e) => setQuery(e.target.value)} value={query} onFocus={() => setOpen(true)}
+                <div className='flex items-center gap-3 w-full h-10 px-4'>
+                    <Search size={18} className="text-gray-400" />
+                    <input type="text" ref={SearchInput} className='w-full h-full bg-transparent border-none outline-none text-white placeholder:text-gray-500 text-sm' placeholder='Search projects...' onChange={(e) => setQuery(e.target.value)} value={query} onFocus={() => setOpen(true)}
                     />
-                    <div className='p-1'>
-                        <span className='border-1 text-sm border-dark-2 px-1 rounded'>Ctrl</span>
-                        &nbsp;
-                        <span className='border-1 text-sm border-dark-2 px-1 rounded'>K</span>
+                    <div className='hidden md:flex items-center gap-1 opacity-40'>
+                        <span className='border border-white/20 text-[10px] px-1.5 py-0.5 rounded'>Ctrl</span>
+                        <span className='border border-white/20 text-[10px] px-1.5 py-0.5 rounded'>K</span>
                     </div>
                 </div>
                 {/* Dropdown for search results */}

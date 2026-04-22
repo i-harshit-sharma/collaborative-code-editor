@@ -8,11 +8,12 @@ import { useAuth } from '@clerk/clerk-react';
 import FileExplorer from '../components/features/editor/FileExplorer';
 import EditorContainer from '../components/features/editor/EditorContainer';
 import TerminalPane from '../components/features/editor/TerminalPane';
-import Whiteboard from '../components/features/editor/Whiteboard';
-import Chat from '../components/features/chat/Chat';
+const Whiteboard = React.lazy(() => import('../components/features/editor/Whiteboard'));
+const Chat = React.lazy(() => import('../components/features/chat/Chat'));
 import SearchL from '../components/features/dashboard/Search';
 import Share from '../components/features/collaboration/Share';
 import PortManager from '../components/features/editor/PortManager';
+import Skeleton from '../components/ui/Skeleton';
 
 const ResizableLayout = ({ showSidebar, sidebarValue }) => {
     const { id: roomId } = useParams();
@@ -25,7 +26,11 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
     const [sidebarWidth, setSidebarWidth] = useState(240);
     const [topHeight, setTopHeight] = useState(window.innerHeight - 300);
     const [activePath, setActivePath] = useState(null);
+    const [tabs, setTabs] = useState([]);
+    const [saveStatuses, setSaveStatuses] = useState({}); // { [path]: 'saved' | 'saving' | 'unsaved' }
     const [vmMetadata, setVmMetadata] = useState(null);
+    const [explorerError, setExplorerError] = useState(null);
+    const [isExplorerLoading, setIsExplorerLoading] = useState(true);
 
     useEffect(() => {
         const fetchMetadata = async () => {
@@ -49,26 +54,49 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
 
     useEffect(() => {
         const socketUrl = import.meta.env.VITE_API_BASE_URL;
-        socketRef.current = io(socketUrl);
-        
-        // Join the room and identify immediately
-        const joinRoom = async () => {
-            try {
-                const token = await getToken();
-                socketRef.current.emit('join-room', { token, roomId });
+        let refreshInterval;
+
+        const initSocket = async () => {
+            const token = await getToken();
+            
+            socketRef.current = io(socketUrl, {
+                auth: { token }
+            });
+            
+            socketRef.current.on('connect', () => {
+                console.log('🔌 Connected to socket server');
+                socketRef.current.emit('join-room', { roomId });
                 socketRef.current.emit('getFiles', { path: '/app', id: roomId });
-            } catch (err) {
-                console.error('Failed to join room:', err);
-            }
+            });
+
+            socketRef.current.on('error', (err) => {
+                console.error('Socket error:', err);
+                if (err === 'Session expired') {
+                    // Force re-auth
+                    getToken({ skipCache: true }).then(newToken => {
+                        socketRef.current.emit('authenticate', { token: newToken });
+                    });
+                }
+            });
+
+            // Keep token fresh (Clerk tokens expire in 60s)
+            refreshInterval = setInterval(async () => {
+                try {
+                    const newToken = await getToken({ skipCache: true });
+                    socketRef.current.emit('authenticate', { token: newToken });
+                } catch (err) {
+                    console.error('Failed to refresh socket token:', err);
+                }
+            }, 45000); // Refresh every 45s
         };
 
-        socketRef.current.on('connect', joinRoom);
+        initSocket();
 
-        // Cleanup
         return () => {
+            if (refreshInterval) clearInterval(refreshInterval);
             socketRef.current?.disconnect();
         };
-    }, [roomId]);
+    }, [roomId, getToken]);
 
     useEffect(() => {
         if (!socketRef.current) return;
@@ -79,17 +107,47 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
         };
 
         const handleFiles = (data) => {
+            setIsExplorerLoading(false);
+            if (data.error) {
+                console.error('File fetch error:', data.error);
+                setExplorerError(`Failed to load files: ${data.error}`);
+                return;
+            }
             if (data.tree) {
                 setFiledata(data.tree);
+                setExplorerError(null);
             }
+        };
+
+        // Timeout for loading
+        const loadingTimeout = setTimeout(() => {
+            if (isExplorerLoading && !filedata) {
+                setExplorerError("Connection timeout. Please refresh or check your internet.");
+                setIsExplorerLoading(false);
+            }
+        }, 10000); // 10s timeout
+
+        const handleFileContent = ({ path, content }) => {
+            setTabs(prev => {
+                const found = prev.find(t => t.path === path);
+                if (found) {
+                    return prev.map(t => t.path === path ? { ...t, content } : t);
+                }
+                return [...prev, { path, content }];
+            });
+            setSaveStatuses(prev => ({ ...prev, [path]: 'saved' }));
+            setActivePath(path);
         };
 
         socket.on('filesReady', handleFilesReady);
         socket.on('files', handleFiles);
+        socket.on('fileContent', handleFileContent);
 
         return () => {
+            clearTimeout(loadingTimeout);
             socket.off('filesReady', handleFilesReady);
             socket.off('files', handleFiles);
+            socket.off('fileContent', handleFileContent);
         };
     }, [roomId]);
     const handleMouseDown = (resizer) => (e) => {
@@ -119,11 +177,53 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
             {showSidebar && (
                 <div style={{ width: sidebarWidth }} className="bg-dark-3 flex flex-col border-r border-gray-800">
                     <div className="flex-1 overflow-hidden">
-                        {sidebarValue === 'explorer' && filedata && <FileExplorer data={filedata} socket={socketRef.current} activePath={activePath} />}
+                        {sidebarValue === 'explorer' && (
+                            explorerError ? (
+                                <div className="p-4 text-center">
+                                    <p className="text-red-400 text-sm mb-3">{explorerError}</p>
+                                    <button 
+                                        onClick={() => {
+                                            setExplorerError(null);
+                                            setIsExplorerLoading(true);
+                                            socketRef.current?.emit('getFiles', { path: '/app', id: roomId });
+                                        }}
+                                        className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded transition-colors"
+                                    >
+                                        Retry
+                                    </button>
+                                </div>
+                            ) : filedata ? (
+                                <FileExplorer data={filedata} socket={socketRef.current} activePath={activePath} width={sidebarWidth} />
+                            ) : (
+                                <div className="flex flex-col gap-3 p-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <Skeleton className="h-4 w-20" />
+                                        <div className="flex gap-2">
+                                            <Skeleton className="h-5 w-5 rounded" />
+                                            <Skeleton className="h-5 w-5 rounded" />
+                                        </div>
+                                    </div>
+                                    {Array.from({ length: 15 }).map((_, i) => (
+                                        <div key={i} className="flex items-center gap-2" style={{ paddingLeft: `${(i % 3) * 12}px` }}>
+                                            <Skeleton className="h-4 w-4 rounded-sm" />
+                                            <Skeleton className={`h-3 rounded-sm ${i % 4 === 0 ? 'w-24' : i % 4 === 1 ? 'w-32' : i % 4 === 2 ? 'w-20' : 'w-28'}`} />
+                                        </div>
+                                    ))}
+                                </div>
+                            )
+                        )}
                         {sidebarValue === 'search' && <SearchL socket={socketRef.current} />}
                         {sidebarValue === 'share' && <Share />}
-                        {sidebarValue === 'chat' && <Chat socket={socketRef.current} roomId={roomId} />}
-                        {sidebarValue === 'draw' && <Whiteboard />}
+                        {sidebarValue === 'chat' && (
+                            <React.Suspense fallback={<div className="p-4 text-gray-400">Loading Chat...</div>}>
+                                <Chat socket={socketRef.current} roomId={roomId} />
+                            </React.Suspense>
+                        )}
+                        {sidebarValue === 'draw' && (
+                            <React.Suspense fallback={<div className="p-4 text-gray-400">Loading Whiteboard...</div>}>
+                                <Whiteboard />
+                            </React.Suspense>
+                        )}
                         {sidebarValue === 'ports' && (
                             <PortManager 
                                 vmId={roomId} 
@@ -143,7 +243,21 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
             {/* Main Area */}
             <div className="flex-1 flex flex-col min-w-0">
                 <div style={{ height: topHeight }} className="flex-1 relative">
-                    {sidebarValue === 'draw' ? <Whiteboard /> : <EditorContainer socket={socketRef.current} activePath={activePath} setActivePath={setActivePath} />}
+                    {sidebarValue === 'draw' ? (
+                        <React.Suspense fallback={<div className="flex-1 flex items-center justify-center bg-dark-4 text-gray-400">Loading Whiteboard...</div>}>
+                            <Whiteboard />
+                        </React.Suspense>
+                    ) : (
+                        <EditorContainer 
+                            socket={socketRef.current} 
+                            activePath={activePath} 
+                            setActivePath={setActivePath} 
+                            tabs={tabs}
+                            setTabs={setTabs}
+                            saveStatuses={saveStatuses}
+                            setSaveStatuses={setSaveStatuses}
+                        />
+                    )}
                 </div>
 
                 {/* Terminal Resizer */}

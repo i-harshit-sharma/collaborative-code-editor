@@ -1,12 +1,14 @@
 import React, { use, useEffect, useState } from 'react'
 import TextArea from './TextArea';
 import ProjectList from '../components/features/dashboard/ProjectList';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react'
 import axios from 'axios';
 import { useAuth } from '@clerk/clerk-react';
 import { Link } from 'react-router-dom';
 import New from './New';
+import { Button } from "../components/ui/button";
+
 
 const userName = "mailmehere090"
 
@@ -62,72 +64,51 @@ const Home = () => {
 
   console.log(list);
   return (
-    <div className='flex-grow h-full overflow-y-scroll no-scrollbar'>
-      <section className='w-full flex flex-col items-center justify-center '>
-        <h1 className='text-2xl font-semibold '>Hi <span className='bg-gradient-to-r from-blue-400 to-blue-1 text-transparent bg-clip-text'>{user?.firstName}</span> What do you want to make today?</h1>
-        <div className='w-[760px]'>
-          <TextArea />
-          <div className='flex'>
-
-            {/* <span>Here Ideas come</span> */}
-          </div>
+    <div className='flex-grow h-full overflow-y-auto no-scrollbar pb-12'>
+      <section className='w-full flex flex-col items-center justify-center pt-20 pb-12 px-6'>
+        <div className='max-w-3xl w-full space-y-6 text-center'>
+            <h1 className='text-4xl md:text-5xl font-bold tracking-tight'>
+                Hi <span className='bg-gradient-to-r from-primary to-blue-400 text-transparent bg-clip-text'>{user?.firstName}</span>
+            </h1>
+            <p className="text-xl text-gray-400 font-medium">What do you want to build today?</p>
+            <div className='w-full'>
+                <TextArea />
+            </div>
         </div>
       </section>
-      <section className='w-full flex items-center justify-center'>
-        <div className='w-[760px]'>
-          <div className='flex justify-between'>
-            <h1 className='text-xl font-semibold'>Your Recent Projects</h1>
-            <Link to="/apps" className='text-md font-semibold flex items-center gap-2 border-1 rounded px-2 py-1 hover:bg-dark-2 cursor-pointer select-none border-dark-1'>View All
-              <ArrowRight size={16} />
+
+      <section className='w-full flex flex-col items-center justify-center px-6 space-y-12'>
+        <div className='max-w-5xl w-full'>
+          <div className='flex items-center justify-between mb-6'>
+            <h2 className='text-2xl font-bold text-white'>Recent Projects</h2>
+            <Link to="/apps">
+                <Button variant="outline" size="sm" className="gap-2 border-dark-1 hover:bg-dark-2">
+                    View All <ArrowRight size={16} />
+                </Button>
             </Link>
           </div>
+          <ProjectList limit={4} />
+        </div>
 
-          <ProjectList limit={3} />
+        <div className='max-w-5xl w-full'>
+            <Link to="/new" className='block group'>
+                <div className='w-full p-8 rounded-2xl border border-dark-1 bg-dark-4 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 text-center space-y-4'>
+                    <div className="flex justify-center">
+                        <div className="p-4 rounded-full bg-primary/10 text-primary group-hover:scale-110 transition-transform duration-300">
+                           <Plus className="size-8" />
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <h3 className='text-xl font-bold text-white'>Add a New Repository</h3>
+                        <p className="text-gray-400 text-sm">Kickstart your next big idea with a new project</p>
+                    </div>
+                </div>
+            </Link>
         </div>
       </section>
-      {/* <button className='bg-red-400 px-4 py-2'
-        onClick={handleClick}
-      >Click Me</button> */}
-      <section className='w-full flex flex-col items-center justify-center mt-4'>
-        <Link to="/new" className='w-[760px] border border-dark-1 mb-6 rounded-lg cursor-pointer hover:bg-blue-1 hover:text-white text-blue-1 text-sm'>
-          <h2 className='font-semibold mb-2 text-center py-2 '>Add a New Repository</h2>
-          {/* <New/>
-          <div className='flex flex-col gap-4'>
-            <input
-              type='text'
-              placeholder='Repository Name'
-              className='border px-4 py-2 rounded'
-              value={repoName}
-              onChange={(e) => setRepoName(e.target.value)}
-            />
-            <input
-              type='text'
-              placeholder='Language'
-              className='border px-4 py-2 rounded'
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-            />
-            <input
-              type='text'
-              placeholder='Type'
-              className='border px-4 py-2 rounded'
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-            />
-            <button
-              className='bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600'
-              onClick={handleSend}
-            >
-              Add Repository
-            </button>
-            {repoName}, {language}, {type}
-          </div> */}
-        </Link>
-      </section>
-
     </div>
-
   )
 }
+
 
 export default Home

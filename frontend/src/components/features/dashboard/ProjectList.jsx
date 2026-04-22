@@ -1,22 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react'
 import RenderSign from '../../../utils/RenderSign'
 import { ChevronDown, Earth, EllipsisVertical, Globe, Link2, Lock, LockKeyhole, Pen, Share2, Trash2, X } from 'lucide-react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuTrigger, } from '../../ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger, } from '../../ui/dropdown-menu'
 import { useAuth } from '@clerk/clerk-react';
 import axios from 'axios';
-import { Dialog } from "radix-ui";
-import { Cross2Icon } from "@radix-ui/react-icons";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../ui/dialog";
 import { frameworks } from '../../../utils/constants'
 import { Combobox } from '../../../pages/New'
-import { Select } from "radix-ui";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue, SelectPortal } from "../../ui/select";
 import { Link } from 'react-router-dom'
-import {
-    CheckIcon,
-    ChevronDownIcon,
-    ChevronUpIcon,
-} from "@radix-ui/react-icons";
-import classnames from "classnames";
+import { Button } from "../../ui/button"
 import { useUser } from '@clerk/clerk-react';
+import Skeleton from '../../ui/Skeleton';
 
 
 function getTimeAgo(date) {
@@ -61,6 +56,7 @@ const ProjectList = ({ limit, shared = false }) => {
 
     useEffect(() => {
         const get = async () => {
+            setLoading(true);
             try {
                 const token = await getToken();
                 const endpoint = shared ? "/protected/get-shared-repos" : "/protected/get-repos";
@@ -74,6 +70,8 @@ const ProjectList = ({ limit, shared = false }) => {
                 setList(response.data);
             } catch (error) {
                 console.error("Error fetching repos:", error);
+            } finally {
+                setLoading(false);
             }
         }
         get()
@@ -123,22 +121,6 @@ const ProjectList = ({ limit, shared = false }) => {
         }
     }
 
-    const SelectItem = React.forwardRef(
-        ({ children, className, ...props }, forwardedRef) => {
-            return (
-                <Select.Item
-                    className={classnames("SelectItem", className)}
-                    {...props}
-                    ref={forwardedRef}
-                >
-                    <Select.ItemText>{children}</Select.ItemText>
-                    <Select.ItemIndicator className="SelectItemIndicator">
-                        <CheckIcon />
-                    </Select.ItemIndicator>
-                </Select.Item>
-            );
-        },
-    );
 
 
     const handleShare = (id, obj) => {
@@ -187,7 +169,22 @@ const ProjectList = ({ limit, shared = false }) => {
     return (
         <>
             <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 my-6 w-full'>
-                {list.length === 0 ? (
+                {loading ? (
+                    // Skeleton Cards
+                    Array.from({ length: limit || 8 }).map((_, i) => (
+                        <div key={i} className='flex flex-col bg-dark-3/50 border border-dark-1 rounded-2xl overflow-hidden p-6 gap-4'>
+                            <Skeleton className="h-20 w-20 rounded-2xl" />
+                            <div className="space-y-2">
+                                <Skeleton className="h-6 w-3/4" />
+                                <Skeleton className="h-4 w-1/2" />
+                            </div>
+                            <div className="pt-4 border-t border-dark-1 mt-auto flex justify-between items-center">
+                                <Skeleton className="h-6 w-20 rounded-lg" />
+                                <Skeleton className="h-8 w-8 rounded-lg" />
+                            </div>
+                        </div>
+                    ))
+                ) : list.length === 0 ? (
                     <div className='col-span-full text-gray-500 text-center py-20 bg-dark-3/30 rounded-2xl border-2 border-dashed border-dark-1'>
                         No Projects Found
                     </div>
@@ -251,260 +248,185 @@ const ProjectList = ({ limit, shared = false }) => {
                     )
                 }))}
             </div>
-                    {edit !== null && (
-                        <div className="fixed inset-0 bg-dark-4/25 bg-opacity-40 flex items-center justify-center z-50">
-                            <div className="bg-dark-4 rounded-2xl shadow-xl p-6 w-full max-w-md relative">
-                                <section className='w-full flex flex-col items-center justify-center mt-4'>
-                                    <h2 className='text-lg font-semibold mb-2'>Edit the Repository</h2>
-                                    <div className='flex flex-col gap-4 w-full'>
-                                        <input
-                                            type='text'
-                                            placeholder='Repository Name'
-                                            className='border border-dark-1 px-2 py-1.5 rounded focus-visible:outline-0 focus:border-blue-500 text-sm '
-                                            ref={repoNameRef}
-                                            defaultValue={list[edit].repoName}
-                                        />
-                                        <Combobox onChange={(e) => setSelectedTemplate(e)} def={list[edit].language} disabled={true} />
-                                        {
-                                            selectedTemplate && (
-                                                <div className='w-full mt-3 p-3 rounded border border-dark-1'>
-                                                    <div className='flex justify-between items-center'>
-                                                        <RenderSign language={frameworks.find((fw) => fw.value === selectedTemplate)?.language} size={32} />
-                                                        <div className='text-xs border-1 border-dark-1 rounded-xl px-2 py-1'>{frameworks.find((fw) => fw.value === selectedTemplate)?.tag}</div>
-                                                    </div>
-                                                    <div>
-                                                        {frameworks.find((fw) => fw.value === selectedTemplate)?.label}
-                                                    </div>
-                                                    <div className='text-sm mt-12'>
-                                                        {frameworks.find((fw) => fw.value === selectedTemplate)?.description}
-                                                    </div>
-                                                </div>
-                                            )
-                                        }
-                                        <select
-                                            className="border border-dark-1 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-1 transition duration-200 bg-dark-4"
-                                            defaultValue={list[edit].type}
-                                            ref={typeRef}
-                                        >
-                                            <option value="Public" className=" text-white ">Public</option>
-                                            <option value="Private" className=" text-white ">Private</option>
-                                        </select>
-                                        <div className='flex justify-between'>
+            {/* Edit Dialog */}
+            <Dialog open={edit !== null} onOpenChange={() => setEdit(null)}>
+                <DialogContent className="sm:max-w-[425px] bg-dark-4 border-dark-2">
+                    <DialogHeader>
+                        <DialogTitle>Edit Repository</DialogTitle>
+                    </DialogHeader>
+                    <div className='flex flex-col gap-4 py-4'>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium text-gray-400">Repository Name</label>
+                            <input
+                                type='text'
+                                placeholder='Repository Name'
+                                className='bg-dark-2 border border-dark-1 px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-sm transition-all'
+                                ref={repoNameRef}
+                                defaultValue={edit !== null ? list[edit].repoName : ""}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium text-gray-400">Language</label>
+                            <Combobox 
+                                onChange={(e) => setSelectedTemplate(e)} 
+                                def={edit !== null ? list[edit].language : ""} 
+                                disabled={true} 
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium text-gray-400">Visibility</label>
+                            <Select
+                                defaultValue={edit !== null ? list[edit].type : "Public"}
+                                onValueChange={(value) => { if(typeRef.current) typeRef.current.value = value }}
+                            >
+                                <SelectTrigger className="w-full bg-dark-2 border-dark-1">
+                                    <SelectValue placeholder="Select visibility" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-dark-4 border-dark-2">
+                                    <SelectItem value="Public">Public</SelectItem>
+                                    <SelectItem value="Private">Private</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <input type="hidden" ref={typeRef} defaultValue={edit !== null ? list[edit].type : "Public"} />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setEdit(null)}>Cancel</Button>
+                        <Button onClick={() => handleEdit(list[edit]._id, { 
+                            repoName: repoNameRef.current.value, 
+                            language: list[edit].language, 
+                            type: typeRef.current.value 
+                        })}>Save Changes</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
-                                            <button
-                                                className='bg-blue-1 text-white px-1.5 py-1 rounded hover:bg-blue-600 cursor-pointer'
-                                                onClick={() => handleEdit(list[edit]._id, { repoName: repoNameRef.current.value, language: list[edit].language, type: typeRef.current.value })}
-                                            >
-                                                Save
-                                            </button>
-                                            <div className="flex justify-end">
-                                                <button
-                                                    onClick={() => setEdit(null)}
-                                                    className="px-4 py-1 bg-dark-3 text-white rounded hover:bg-dark-2 cursor-pointer transition"
-                                                >
-                                                    Cancel
-                                                </button>
+            {/* Share Dialog */}
+            <Dialog open={share !== null} onOpenChange={() => setShare(null)}>
+                <DialogContent className="sm:max-w-[425px] bg-dark-4 border-dark-2">
+                    <DialogHeader>
+                        <DialogTitle>Share "{share !== null ? list[share].repoName : ""}"</DialogTitle>
+                    </DialogHeader>
+                    <div className='flex flex-col gap-4 py-4'>
+                        <input 
+                            type='email' 
+                            className='w-full bg-dark-2 text-sm text-gray-200 outline-none p-2 rounded-lg border border-dark-1 focus:ring-1 focus:ring-primary' 
+                            placeholder='Add people by email' 
+                            ref={inputRef} 
+                        />
+                        <div className='flex items-center gap-3'>
+                            <span className='text-sm text-gray-400'>Role:</span>
+                            <Select value={userConf} onValueChange={setUserConf}>
+                                <SelectTrigger className="w-32 bg-dark-2 border-dark-1">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-dark-4 border-dark-2">
+                                    <SelectItem value="Editor">Editor</SelectItem>
+                                    <SelectItem value="Viewer">Viewer</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-3 mt-2">
+                            <h3 className='text-sm font-semibold text-gray-400'>People with Access</h3>
+                            <div className="max-h-[200px] overflow-y-auto pr-2 space-y-2 no-scrollbar">
+                                {usersData?.sharedUsers.map((user, i) => (
+                                    <div key={i} className='flex items-center justify-between p-2 rounded-lg bg-dark-2/50 border border-dark-1/50'>
+                                        <div className='flex items-center gap-3'>
+                                            <img src={user.raw.image_url} className='h-8 w-8 rounded-full border border-dark-1' />
+                                            <div className='flex flex-col'>
+                                                <span className='text-xs font-medium text-white'>{user.raw.first_name} {user.raw.last_name}</span>
+                                                <span className='text-[10px] text-gray-400 truncate w-32'>{user.raw.email_addresses[0].email_address}</span>
                                             </div>
                                         </div>
+                                        <span className='text-[10px] font-medium px-2 py-0.5 rounded-full bg-dark-3 text-gray-300'>{user.role}</span>
                                     </div>
-                                </section>
-                                <button
-                                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"
-                                    onClick={() => setEdit(null)}
-                                ><X size={24} color='#ddd' /></button>
+                                ))}
+                                {(!usersData || usersData.sharedUsers.length === 0) && (
+                                    <p className="text-xs text-gray-500 italic">No one else has access yet.</p>
+                                )}
                             </div>
                         </div>
-                    )}
-                    {share !== null && (
-                        <div className="fixed inset-0 bg-dark-4/25 bg-opacity-40 flex items-center justify-center z-50">
-                            <div className="bg-dark-4 rounded-2xl shadow-xl p-6 w-full max-w-md relative">
-                                <h1 className='text-xl'>Share "{list[share].repoName}"</h1>
-                                <input type='email ' className='w-full bg-dark-2 text-sm my-3 text-gray-200 outline-0 ring-0 p-1.5 border border-dark-1' placeholder='Add people' ref={inputRef} />
-                                <div className='flex gap-4 items-center'>
-                                    <div className='text-sm'>Role : </div>
-                                    <Select.Root
-                                        value={userConf}
-                                        onValueChange={(value) =>
-                                            setUserConf(value)
-                                        }
-                                    >
-                                        <Select.Trigger className="SelectTrigger focus-visible:ring-0 outline-0 rounded hover:bg-dark-2 " aria-label="Food">
-                                            <Select.Value placeholder="Select a fruit…" />
-                                            <Select.Icon className="SelectIcon">
-                                                <ChevronDownIcon />
-                                            </Select.Icon>
-                                        </Select.Trigger>
-                                        <Select.Portal>
-                                            <Select.Content className="SelectContent absolute z-64">
-                                                <Select.ScrollUpButton className="SelectScrollButton">
-                                                    <ChevronUpIcon />
-                                                </Select.ScrollUpButton>
-                                                <Select.Viewport className="SelectViewport w-28">
-                                                    <Select.Group>
-                                                        <SelectItem value="Editor">Editor</SelectItem>
-                                                        <SelectItem value="Viewer">
-                                                            Viewer
-                                                        </SelectItem>
-                                                    </Select.Group>
 
-                                                </Select.Viewport>
-                                                <Select.ScrollDownButton className="SelectScrollButton">
-                                                    <ChevronDownIcon />
-                                                </Select.ScrollDownButton>
-                                            </Select.Content>
-                                        </Select.Portal>
-                                    </Select.Root>
-                                </div>
-                                <h1 className='text-base mt-3 mb-1'>People with Access</h1>
-                                {usersData &&
-                                    usersData?.sharedUsers.map((user) => {
-                                        return (
-                                            <div className='flex items-center mt-2 hover:bg-dark-1 p-2 rounded text-white w-full justify-between'>
-                                                <div className='gap-3 flex items-center'>
-                                                    <img src={user.raw.image_url} className='h-10 rounded-full ' />
-                                                    <div className='flex flex-col'>
-                                                        <span className='text-sm'>{user.raw.first_name + ' ' + user.raw.last_name}</span>
-                                                        <span className='text-sm'>{user.raw.email_addresses[0].email_address}</span>
-                                                    </div>
-                                                </div>
-                                                <div className='justify-self-end text-sm'>{user.role}</div>
-                                            </div>)
-                                    })}
-                                <h1 className='text-cl'>General Access</h1>
-                                <div className='flex gap-2 items-center mt-2 px-3'>
-                                    {usersData &&
-                                        shareConfig[0] === "Restricted" ? <LockKeyhole /> : <Earth color='#c9ffe5' />
-                                    }
-                                    {usersData &&
-                                        <div className='flex flex-col gap-1'>
-                                            <span className='text-sm'>
-                                                <Select.Root
-                                                    value={shareConfig[0]}
-                                                    onValueChange={(value) =>
-                                                        setShareConfig((prev) => [value, prev[1]])
-                                                    }
-                                                >
-                                                    <Select.Trigger className="SelectTrigger focus-visible:ring-0 outline-0 rounded hover:bg-dark-2 " aria-label="Food">
-                                                        <Select.Value placeholder="Select a fruit…" />
-                                                        <Select.Icon className="SelectIcon">
-                                                            <ChevronDownIcon />
-                                                        </Select.Icon>
-                                                    </Select.Trigger>
-                                                    <Select.Portal>
-                                                        <Select.Content className="SelectContent absolute z-64">
-                                                            <Select.ScrollUpButton className="SelectScrollButton">
-                                                                <ChevronUpIcon />
-                                                            </Select.ScrollUpButton>
-                                                            <Select.Viewport className="SelectViewport w-48">
-                                                                <Select.Group>
-                                                                    <SelectItem value="Restricted">Restricted</SelectItem>
-                                                                    <SelectItem value="Anyone with the Link">
-                                                                        Anyone with the Link
-                                                                    </SelectItem>
-                                                                </Select.Group>
-
-                                                            </Select.Viewport>
-                                                            <Select.ScrollDownButton className="SelectScrollButton">
-                                                                <ChevronDownIcon />
-                                                            </Select.ScrollDownButton>
-                                                        </Select.Content>
-                                                    </Select.Portal>
-                                                </Select.Root>
-                                            </span>
-                                            {shareConfig[0] === "Restricted" ? <span className='text-xs'>Only people with access can open with the link</span> : <span className='text-xs'>Anyone on the internet with the link can view</span>}
-
-                                        </div>
-                                    }
-                                    {usersData && shareConfig[0] !== "Restricted" &&
-                                        <div className='flex flex-col gap-1'>
-                                            <span className='text-sm'>
-                                                <Select.Root
-                                                    value={shareConfig[1]}
-                                                    onValueChange={(value) =>
-                                                        setShareConfig((prev) => [prev[0], value])
-                                                    }
-                                                >
-                                                    <Select.Trigger className="SelectTrigger focus-visible:ring-0 outline-0 rounded hover:bg-dark-2 " aria-label="Food">
-                                                        <Select.Value placeholder="Select a fruit…" />
-                                                        <Select.Icon className="SelectIcon">
-                                                            <ChevronDownIcon />
-                                                        </Select.Icon>
-                                                    </Select.Trigger>
-                                                    <Select.Portal>
-                                                        <Select.Content className="SelectContent absolute z-64">
-                                                            <Select.ScrollUpButton className="SelectScrollButton">
-                                                                <ChevronUpIcon />
-                                                            </Select.ScrollUpButton>
-                                                            <Select.Viewport className="SelectViewport w-48">
-                                                                <Select.Group>
-                                                                    <SelectItem value="Viewer">Viewer</SelectItem>
-                                                                    <SelectItem value="Editor">Editor</SelectItem>
-                                                                </Select.Group>
-
-                                                            </Select.Viewport>
-                                                            <Select.ScrollDownButton className="SelectScrollButton">
-                                                                <ChevronDownIcon />
-                                                            </Select.ScrollDownButton>
-                                                        </Select.Content>
-                                                    </Select.Portal>
-                                                </Select.Root>
-                                            </span>
-                                        </div>
-                                    }
-                                </div>
-                                <div className='flex items-center justify-between mt-4'>
-                                    <span className='flex items-center gap-2 border rounded py-1 px-3 hover:border-blue-1 border-dark-1' onClick={() => {
-                                        const link = "http://" + "localhost:5173" + "/editor/" + usersData.vmId;
-                                        navigator.clipboard.writeText(link)
-                                            .then(() => {
-                                                console.log("Link copied to clipboard!");
-                                            })
-                                            .catch(err => {
-                                                console.error("Failed to copy: ", err);
-                                            });
-                                    }}>
-                                        <Link2 size={18} />
-                                        Copy Link
-                                    </span>
-                                    <span className='border border-dark-1 rounded bg-blue-1 px-3 py-1' onClick={() => { handleShare(list[share]._id, { email: inputRef.current.value, shareConfig, role: userConf }) }}>
-                                        Done
+                        <div className="space-y-2 mt-4 pt-4 border-t border-dark-1">
+                            <h3 className='text-sm font-semibold text-gray-400'>General Access</h3>
+                            <div className='flex items-center gap-3 p-2 rounded-lg bg-dark-2/30'>
+                                {shareConfig[0] === "Restricted" ? <LockKeyhole className="text-gray-400 size-5" /> : <Earth className="text-green-400 size-5" />}
+                                <div className='flex flex-col flex-1 gap-1'>
+                                    <Select value={shareConfig[0]} onValueChange={(val) => setShareConfig([val, shareConfig[1]])}>
+                                        <SelectTrigger className="h-7 text-xs bg-transparent border-none p-0 focus:ring-0">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Restricted">Restricted</SelectItem>
+                                            <SelectItem value="Anyone with the Link">Anyone with the Link</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <span className='text-[10px] text-gray-500'>
+                                        {shareConfig[0] === "Restricted" ? "Only people with access can open" : "Anyone with the link can view"}
                                     </span>
                                 </div>
-                                <button
-                                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"
-                                    onClick={() => setShare(null)}
-                                ><X size={24} color='#ddd' /></button>
+                                {shareConfig[0] !== "Restricted" && (
+                                    <Select value={shareConfig[1]} onValueChange={(val) => setShareConfig([shareConfig[0], val])}>
+                                        <SelectTrigger className="h-7 w-24 text-xs bg-dark-2 border-dark-1">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Viewer">Viewer</SelectItem>
+                                            <SelectItem value="Editor">Editor</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                )}
                             </div>
                         </div>
-                    )}
-                    {deleteRepo !== null && (
-                        <div className="fixed inset-0 bg-dark-4/25 bg-opacity-40 flex items-center justify-center z-50">
-                            <div className="bg-dark-4 rounded-2xl shadow-xl p-6 max-w-md relative  w-full">
-                                <h1 className='text-xl'>Delete "{list[deleteRepo].repoName}"</h1>
-                                <p className='text-sm text-gray-400'>Are you sure you want to delete this repository? This action cannot be undone.</p>
-                                <input type='text' className='w-full bg-dark-2 text-sm my-3 text-gray-200 outline-0 ring-0 p-1.5 border border-dark-1' placeholder='Type Repository name to confirm' ref={deleteRef} />
-                                <div className='flex items-center justify-between gap-2 ' >
-                                    <button className='bg-red-500 px-2 rounded py-1 flex-1'
-                                        onClick={() => {
-                                            if (deleteRef.current.value === list[deleteRepo].repoName) {
-                                                handleDelete(list[deleteRepo]._id)
-                                            }
-                                            else {
-                                                setDeleteRepo(null)
-                                            }
-                                        }}
-                                    >Delete</button>
-                                    <button className='bg-dark-1 px-2 rounded py-1 flex-1'
-                                        onClick={() => setDeleteRepo(null)}>Cancel
-                                    </button>
-                                </div>
-                                <button
-                                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"
-                                    onClick={() => setDeleteRepo(null)}
-                                ><X size={24} color='#ddd' /></button>
-                            </div>
-                        </div>
-                    )}
+                    </div>
+                    <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="gap-2"
+                            onClick={() => {
+                                const link = window.location.origin + "/editor/" + usersData?.vmId;
+                                navigator.clipboard.writeText(link);
+                            }}
+                        >
+                            <Link2 size={14} /> Copy Link
+                        </Button>
+                        <Button size="sm" onClick={() => handleShare(list[share]._id, { email: inputRef.current.value, shareConfig, role: userConf })}>
+                            Done
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Dialog */}
+            <Dialog open={deleteRepo !== null} onOpenChange={() => setDeleteRepo(null)}>
+                <DialogContent className="sm:max-w-[425px] bg-dark-4 border-dark-2">
+                    <DialogHeader>
+                        <DialogTitle className="text-red-400">Delete Repository</DialogTitle>
+                    </DialogHeader>
+                    <div className='py-4 space-y-4'>
+                        <p className='text-sm text-gray-400'>
+                            This will permanently delete <span className="text-white font-semibold">"{deleteRepo !== null ? list[deleteRepo].repoName : ""}"</span>.
+                            Please type the repository name to confirm.
+                        </p>
+                        <input 
+                            type='text' 
+                            className='w-full bg-dark-2 text-sm text-gray-200 outline-none p-2 rounded-lg border border-dark-1 focus:ring-1 focus:ring-destructive' 
+                            placeholder='Type repo name here' 
+                            ref={deleteRef} 
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setDeleteRepo(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={() => {
+                            if (deleteRef.current.value === list[deleteRepo].repoName) {
+                                handleDelete(list[deleteRepo]._id);
+                            }
+                        }}>Delete Permanently</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     )
 }

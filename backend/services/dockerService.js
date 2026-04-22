@@ -1,4 +1,5 @@
 import docker, { getBackendNetwork } from '../config/docker.js';
+import logger from '../utils/logger.js';
 
 export const createContainerFromImages = async (imageList, language) => {
   const networkName = await getBackendNetwork();
@@ -27,17 +28,17 @@ export const createContainerFromImages = async (imageList, language) => {
       };
 
       if (networkName) {
-        console.log(`🔗 Joining same network as backend: ${networkName}`);
+        logger.info(`🔗 Joining same network as backend: ${networkName}`);
         containerConfig.HostConfig.NetworkMode = networkName;
       }
 
       const container = await docker.createContainer(containerConfig);
 
       await container.start();
-      console.log(`Container created and started from image "${imageName}"`);
+      logger.success(`Container created and started from image "${imageName}"`);
       return container.id;
     } catch (err) {
-      console.warn(`Failed with image "${imageName}": ${err.message}`);
+      logger.warn(`Failed with image "${imageName}": ${err.message}`);
     }
   }
 

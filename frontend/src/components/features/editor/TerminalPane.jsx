@@ -3,13 +3,10 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { v4 as uuidv4 } from 'uuid';
 import 'xterm/css/xterm.css';
-import { useAuth } from '@clerk/clerk-react';
-
 export default function TerminalPane({ containerId, socket }) {
   const terminalsRef = useRef({});
   const [termIds, setTermIds] = useState([]);
   const [activeTermId, setActiveTermId] = useState(null);
-  const { getToken } = useAuth();
 
   useEffect(() => {
     if (!socket) return;
@@ -74,8 +71,7 @@ export default function TerminalPane({ containerId, socket }) {
       entry.fit.fit();
       entry.term.focus();
 
-      const token = await getToken();
-      socket.emit('sendToken', { token, containerId, terminalId: termId });
+      socket.emit('sendToken', { containerId, terminalId: termId });
 
       entry.term.onData(data => {
         socket.emit('input', { terminalId: termId, data });

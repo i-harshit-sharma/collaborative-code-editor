@@ -14,7 +14,7 @@ import About from "./pages/About.jsx";
 import Working from "./pages/Working.jsx";
 import Landing from "./pages/Landing.jsx";
 import Try from "./pages/Try.jsx";
-import Editor from "./pages/Editor.jsx";
+const Editor = React.lazy(() => import("./pages/Editor.jsx"));
 import Test from "./pages/Test.jsx";
 import TestEditor from "./pages/TestEditor.jsx";
 
@@ -49,7 +49,9 @@ const routes = createBrowserRouter([
     path: "/editor/:id",
     element: (
       <ConditionallyProtect>
-        <Editor />
+        <React.Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-dark-4 text-white">Loading Editor...</div>}>
+          <Editor />
+        </React.Suspense>
       </ConditionallyProtect>
     ),
   },

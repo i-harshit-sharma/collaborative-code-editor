@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs-extra';
 import { exec } from 'child_process';
+import logger from '../utils/logger.js';
 
 export const uploadFiles = async (req, res, io) => {
   const files = req.files;
@@ -12,10 +13,10 @@ export const uploadFiles = async (req, res, io) => {
       const destPath = path.join("temp_upload", file.originalname);
       await fs.move(file.path, destPath, { overwrite: true });
 
-      console.log("Updating container with file:", `docker cp ${destPath} ${containerId}:${targetPath}`);
+      logger.info(`📤 Updating container ${containerId} with file: ${file.originalname}`);
       exec(`docker cp ${destPath} ${containerId}:${targetPath}`, (err, stdout, stderr) => {
         if (err) {
-          console.error(`Error copying file to Docker: ${stderr}`);
+          logger.error(`Error copying file to Docker: ${stderr || err.message}`);
         }
       });
       if (io) io.emit('filesReady', 'files are ready to be read');
@@ -23,7 +24,7 @@ export const uploadFiles = async (req, res, io) => {
 
     res.status(200).send("Files transferred to container");
   } catch (error) {
-    console.error(error);
+    logger.error(`Failed to upload files: ${error.message}`);
     res.status(500).send("Failed to upload files");
   }
 };
