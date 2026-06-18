@@ -31,8 +31,8 @@ error()   { echo -e "${RED}[ERROR]${RESET} $*" >&2; }
 step()    { echo -e "\n${BOLD}${GREEN}▶ $*${RESET}"; }
 
 # ─── Default configuration ────────────────────────────────────────────────────
-REPO_URL="https://github.com/i-harshit-sharma/4thsemProject.git"
-BRANCH="main"
+REPO_URL="https://github.com/i-harshit-sharma/collaborative-code-editor.git"
+BRANCH="master"
 SKIP_PULL=false
 BACKEND_ONLY=false
 FRONTEND_ONLY=false
