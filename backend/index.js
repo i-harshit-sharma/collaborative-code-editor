@@ -1,6 +1,7 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,7 +15,6 @@ import { handlePortProxy, handlePortProxyUpgrade } from './middleware/portProxy.
 import { handleFallbackProxy } from './middleware/fallbackProxy.js';
 import logger from './utils/logger.js';
 
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
