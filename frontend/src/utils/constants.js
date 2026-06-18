@@ -13,7 +13,6 @@ const frameworks = [
     {value: "nextjs", label: "Next.js", language: "Javascript", description: "React framework for production", tag: "websites"},
     { value: "spring-boot", label: "Spring Boot", language: "Java", description: "Enterprise Java framework", tag: "websites" },
     { value: "cpp-cmake", label: "C++ (CMake)", language: "C++", description: "Structured C++ project with CMake", tag: "language" },
-    { value: "bare", label: "Bare Machine", language: "Ubuntu", description: "Minimal Ubuntu environment with basic build tools", tag: "language" },
 ]
 
 const LANGUAGE_VERSIONS = {
@@ -22,7 +21,6 @@ const LANGUAGE_VERSIONS = {
     python: "3.11 (Slim)",
     java: "17.0 (Temurin)",
     cpp: "14.2 (GCC Latest)",
-    ubuntu: "22.04 (LTS)",
 };
 
 const CODE_SNIPPETS = {

@@ -4,6 +4,14 @@ import logger from '../utils/logger.js';
 
 export const executeCode = async (req, res) => {
   const { language, sourceCode } = req.body;
+
+  if (!sourceCode || typeof sourceCode !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid "sourceCode" in request body.' });
+  }
+  if (!language || typeof language !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid "language" in request body.' });
+  }
+
   const encodedCode = Buffer.from(sourceCode).toString('base64');
 
   const specs = {

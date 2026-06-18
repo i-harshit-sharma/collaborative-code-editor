@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # =============================================================================
 #  script.sh — Pull from GitHub, install deps, run prerun commands & start
 #              both backend and frontend servers for 4thsemProject
@@ -122,8 +122,10 @@ if [[ "$FRONTEND_ONLY" == false ]]; then
 
   # Check for .env file
   if [[ ! -f ".env" ]]; then
-    warn ".env file not found in backend/. Please create one before running."
-    warn "Required variables: PORT, MONGO_URI, CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY"
+    error ".env file not found in backend/. Please create one before running."
+    error "Required variables: PORT, MONGO_URI, CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY"
+    error "Example: cp backend/.env.example backend/.env  (then fill in the values)"
+    exit 1
   else
     success ".env file detected."
   fi

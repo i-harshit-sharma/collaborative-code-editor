@@ -28,7 +28,7 @@ export const checkRepoPermission = async (id, token) => {
  */
 export const executeCode = async (language, code) => {
   try {
-    const response = await api.post("/run-code", { language, code });
+    const response = await api.post("/api/execute", { language, sourceCode: code });
     return response.data;
   } catch (error) {
     throw error.response ? error.response.data : error;

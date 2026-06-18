@@ -1,10 +1,10 @@
 export const executionImages = [
-  // {
-  //   name: 'code-collab-node-executor',
-  //   dockerfile: 'docker/node/Dockerfile',
-  //   context: '.',
-  //   type: 'build'
-  // },
+  {
+    name: 'code-collab-node-executor',
+    dockerfile: 'docker/node/Dockerfile',
+    context: '.',
+    type: 'build'
+  },
   {
     name: 'code-collab-nextjs-executor',
     dockerfile: 'docker/node/nextjs/Dockerfile',
@@ -17,18 +17,18 @@ export const executionImages = [
     context: '.',
     type: 'build'
   },
-  // {
-  //   name: 'code-collab-cpp-executor',
-  //   dockerfile: 'docker/cpp/Dockerfile',
-  //   context: '.',
-  //   type: 'build'
-  // },
-  // {
-  //   name: 'code-collab-java-executor',
-  //   dockerfile: 'docker/java/Dockerfile',
-  //   context: '.',
-  //   type: 'build'
-  // },
+  {
+    name: 'code-collab-cpp-executor',
+    dockerfile: 'docker/cpp/Dockerfile',
+    context: '.',
+    type: 'build'
+  },
+  {
+    name: 'code-collab-java-executor',
+    dockerfile: 'docker/java/Dockerfile',
+    context: '.',
+    type: 'build'
+  },
   // {
   //   name: 'code-collab-python-flask-executor',
   //   dockerfile: 'docker/python/flask/Dockerfile',
