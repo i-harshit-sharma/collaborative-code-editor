@@ -73,6 +73,15 @@ for cmd in git node npm; do
   fi
 done
 
+# Ensure PM2 is available
+if ! command -v pm2 &>/dev/null; then
+  info "pm2 not found — installing globally ..."
+  npm install -g pm2
+  success "pm2 installed  →  $(pm2 --version)"
+else
+  success "pm2 found  →  $(pm2 --version)"
+fi
+
 # Check Docker only if backend is involved (needs dockerode / setupImages)
 if [[ "$FRONTEND_ONLY" == false ]]; then
   if command -v docker &>/dev/null; then
@@ -158,55 +167,49 @@ if [[ "$BACKEND_ONLY" == false ]]; then
 
 fi
 
+# ─── Helper: start or restart a PM2 process ─────────────────────────────────
+pm2_start_or_restart() {
+  local name="$1"
+  local cmd="$2"
+  local cwd="$3"
+
+  if pm2 describe "$name" &>/dev/null; then
+    info "PM2 process '$name' already exists — restarting ..."
+    pm2 restart "$name"
+  else
+    info "Starting PM2 process '$name' ..."
+    pm2 start $cmd --name "$name" --cwd "$cwd"
+  fi
+}
+
 # ─── Start servers ────────────────────────────────────────────────────────────
 step "Starting servers"
 
-# Trap Ctrl+C to kill all background processes gracefully
-cleanup() {
-  echo ""
-  warn "Shutting down servers ..."
-  kill "${BACKEND_PID:-}" "${FRONTEND_PID:-}" 2>/dev/null || true
-  success "Servers stopped. Goodbye!"
-  exit 0
-}
-trap cleanup SIGINT SIGTERM
+BACKEND_PORT="$(grep -m1 '^PORT=' "${BACKEND_DIR}/.env" 2>/dev/null | cut -d= -f2 || echo 4000)"
 
 if [[ "$FRONTEND_ONLY" == false && "$BACKEND_ONLY" == false ]]; then
   # ── Both servers ────────────────────────────────────────────────────────────
-  info "Starting backend  (node index.js)  ..."
-  cd "$BACKEND_DIR"
-  node index.js &
-  BACKEND_PID=$!
-  success "Backend started  [PID: ${BACKEND_PID}]  →  http://localhost:$(grep -m1 '^PORT=' .env 2>/dev/null | cut -d= -f2 || echo 4000)"
+  pm2_start_or_restart "collab-backend"  "index.js"    "$BACKEND_DIR"
+  success "Backend running via PM2  →  http://localhost:${BACKEND_PORT}"
 
-  info "Starting frontend (vite dev server) ..."
-  cd "$FRONTEND_DIR"
-  npm run dev &
-  FRONTEND_PID=$!
-  success "Frontend started [PID: ${FRONTEND_PID}]  →  http://localhost:5173"
-
-  info "Press Ctrl+C to stop both servers."
-  wait "${BACKEND_PID}" "${FRONTEND_PID}"
+  pm2_start_or_restart "collab-frontend" "npm -- run dev" "$FRONTEND_DIR"
+  success "Frontend running via PM2  →  http://localhost:5173"
 
 elif [[ "$BACKEND_ONLY" == true ]]; then
   # ── Backend only ────────────────────────────────────────────────────────────
-  info "Starting backend  (node index.js)  ..."
-  cd "$BACKEND_DIR"
-  node index.js &
-  BACKEND_PID=$!
-  success "Backend started  [PID: ${BACKEND_PID}]  →  http://localhost:$(grep -m1 '^PORT=' .env 2>/dev/null | cut -d= -f2 || echo 4000)"
-
-  info "Press Ctrl+C to stop the server."
-  wait "${BACKEND_PID}"
+  pm2_start_or_restart "collab-backend" "index.js" "$BACKEND_DIR"
+  success "Backend running via PM2  →  http://localhost:${BACKEND_PORT}"
 
 elif [[ "$FRONTEND_ONLY" == true ]]; then
   # ── Frontend only ───────────────────────────────────────────────────────────
-  info "Starting frontend (vite dev server) ..."
-  cd "$FRONTEND_DIR"
-  npm run dev &
-  FRONTEND_PID=$!
-  success "Frontend started [PID: ${FRONTEND_PID}]  →  http://localhost:5173"
-
-  info "Press Ctrl+C to stop the server."
-  wait "${FRONTEND_PID}"
+  pm2_start_or_restart "collab-frontend" "npm -- run dev" "$FRONTEND_DIR"
+  success "Frontend running via PM2  →  http://localhost:5173"
 fi
+
+# Show live PM2 process table
+pm2 list
+
+info "Use  'pm2 logs'          to tail logs."
+info "Use  'pm2 stop all'      to stop all processes."
+info "Use  'pm2 restart all'   to restart all processes."
+info "Use  'pm2 delete all'    to remove all processes from PM2."
