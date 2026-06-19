@@ -3,13 +3,15 @@ import {
   shareRepo, 
   getSharedUsers, 
   getSharedUsersByVmId, 
-  getSharedRepos 
+  getSharedRepos,
+  removeUser
 } from '../controllers/shareController.js';
 
 const router = express.Router();
 
 // Protected routes (will be prefixed with /protected in main router)
 router.post('/share-repo', shareRepo);
+router.post('/remove-user', removeUser);
 router.get('/get-shared-users/:id', getSharedUsers);
 router.get('/get-shared-repos', getSharedRepos);
 

@@ -110,3 +110,38 @@ export const getSharedRepos = async (req, res) => {
 
   res.json(repos.filter(repo => repo.owner !== authId));
 };
+
+export const removeUser = async (req, res) => {
+  try {
+    const { id, email } = req.body;
+    const userList = await clerkClient.users.getUserList({ emailAddress: email });
+    const user = req.user;
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let repo = user.repos.id(id);
+    if (!repo) {
+      repo = user.repos.find((repo) => repo.vmId === id);
+      if (!repo) {
+        return res.status(404).json({ error: 'Repository not found' });
+      }
+    }
+
+    if (userList.data.length === 0) {
+      return res.status(404).json({ error: 'User to remove not found' });
+    }
+    const userIdToRemove = userList.data[0].id;
+
+    repo.sharedUsers = repo.sharedUsers.filter((u) => u.userId !== userIdToRemove);
+    await user.save();
+
+    logger.success(`❌ Removed user ${email} from repository ${id}`);
+    res.json(repo);
+  } catch (error) {
+    logger.error(`Remove user error: ${error.message}`);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+

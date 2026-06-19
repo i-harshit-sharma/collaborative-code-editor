@@ -223,7 +223,7 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
                             )
                         )}
                         {sidebarValue === 'search' && <SearchL socket={socket} />}
-                        {sidebarValue === 'share' && <Share />}
+                        {sidebarValue === 'share' && <Share currentRole={vmMetadata?.role} />}
                         {sidebarValue === 'chat' && (
                             <React.Suspense fallback={<div className="p-4 text-gray-400">Loading Chat...</div>}>
                                 <Chat socket={socket} roomId={roomId} />
