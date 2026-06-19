@@ -22,14 +22,7 @@ setInterval(async () => {
 export default (server) => {
   const io = new Server(server, {
     cors: {
-      origin: [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://localhost:4000",
-        "https://cc.harshits.live",
-        process.env.FRONTEND_URL, // optional: set in .env for flexibility
-      ].filter(Boolean),
+      origin: true, // Dynamically allow any requesting origin
       credentials: true,
       methods: ["GET", "POST"]
     },
