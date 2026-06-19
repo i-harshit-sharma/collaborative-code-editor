@@ -60,7 +60,8 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
             const token = await getToken();
             
             socketRef.current = io(socketUrl, {
-                auth: { token }
+                auth: { token },
+                transports: ['websocket']
             });
             
             socketRef.current.on('connect', () => {

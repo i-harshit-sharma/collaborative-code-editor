@@ -181,7 +181,8 @@ export default function Working() {
     const setup = async () => {
       const token = await getToken();
       socketRef.current = io(import.meta.env.VITE_API_BASE_URL, {
-        auth: { token }
+        auth: { token },
+        transports: ['websocket']
       });
 
       socketRef.current.on('output', ({ terminalId, data }) => {

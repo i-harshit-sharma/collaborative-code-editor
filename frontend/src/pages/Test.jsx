@@ -4,7 +4,9 @@ import Editor from '@monaco-editor/react';
 import io from 'socket.io-client';
 import axios from 'axios';
 
-const socket = io(import.meta.env.VITE_API_BASE_URL);
+const socket = io(import.meta.env.VITE_API_BASE_URL, {
+  transports: ['websocket']
+});
 
 export default function Test() {
   const { roomId } = useParams();

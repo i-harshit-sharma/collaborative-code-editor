@@ -30,7 +30,9 @@ export default function Whiteboard() {
   }
 
   useEffect(() => {
-    socketRef.current = io(SOCKET_SERVER_URL);
+    socketRef.current = io(SOCKET_SERVER_URL, {
+      transports: ['websocket']
+    });
     socketRef.current.emit('join-room', roomId);
 
     socketRef.current.on('drawing', ({ x0, y0, x1, y1, color, size }) => {
