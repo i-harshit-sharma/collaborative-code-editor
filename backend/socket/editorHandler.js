@@ -12,12 +12,14 @@ export default (io, socket, rooms, userList) => {
     const cmd = `docker exec ${data.id} find ${basePath} -maxdepth 5 -not -path '*/.*' -not -path '*/node_modules*' -not -path '*/.next*' -not -path '*/dist*' -not -path '*/build*' -printf "%y %p\\n"`;
     
     exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        logger.error(`getFiles error for VM ${data.id}: ${stderr || error.message}`);
-        return socket.emit('files', { error: stderr });
+      const lines = stdout ? stdout.split('\n').filter(Boolean) : [];
+      
+      if (error && lines.length === 0) {
+        const errorMsg = stderr.trim() || error.message;
+        logger.error(`getFiles error for VM ${data.id}: ${errorMsg}`);
+        return socket.emit('files', { error: errorMsg });
       }
 
-      const lines = stdout.split('\n').filter(Boolean);
       const tree = buildTreeFromFind(lines, basePath);
       socket.emit('files', { tree });
     });
@@ -29,7 +31,7 @@ export default (io, socket, rooms, userList) => {
     const cmd = `docker exec ${data.id} cat ${data.path}`;
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
-        return socket.emit('fileContent', { error: stderr });
+        return socket.emit('fileContent', { error: stderr.trim() || error.message });
       }
       socket.emit('fileContent', { content: stdout, path: data.path });
     });
@@ -43,7 +45,7 @@ export default (io, socket, rooms, userList) => {
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
         logger.error(`deleteFile error: ${stderr || error.message}`);
-        return socket.emit('fileContent', { error: stderr });
+        return socket.emit('fileContent', { error: stderr.trim() || error.message });
       }
       socket.emit('fileContent', { content: stdout, path: data.path });
     });
@@ -58,7 +60,7 @@ export default (io, socket, rooms, userList) => {
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
         logger.error(`renameFile error: ${stderr || err.message}`);
-        return socket.emit('renameError', { error: stderr });
+        return socket.emit('renameError', { error: stderr.trim() || err.message });
       }
       socket.emit("filesReady", 'files are ready to be read');
     });
@@ -71,7 +73,7 @@ export default (io, socket, rooms, userList) => {
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
         logger.error(`createFile error: ${stderr || err.message}`);
-        return socket.emit('createError', { error: stderr });
+        return socket.emit('createError', { error: stderr.trim() || err.message });
       }
       socket.emit("filesReady", 'files are ready to be read');
     });
@@ -84,7 +86,7 @@ export default (io, socket, rooms, userList) => {
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
         logger.error(`createFolder error: ${stderr || err.message}`);
-        return socket.emit('createError', { error: stderr });
+        return socket.emit('createError', { error: stderr.trim() || err.message });
       }
       socket.emit("filesReady", 'files are ready to be read');
     });
