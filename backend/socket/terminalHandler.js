@@ -3,6 +3,7 @@ import pty from '@lydell/node-pty';
 import { randomBytes } from 'crypto';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
+import { getUserRoleForVm } from '../services/repoService.js';
 
 export default (io, socket) => {
   const ptyProcesses = new Map();
@@ -19,6 +20,13 @@ export default (io, socket) => {
     if (!userId) {
       logger.error(`Unauthorized terminal access attempt by socket ${socket.id}`);
       socket.emit('output', { terminalId, data: 'Error: Unauthorized.\r\n' });
+      return;
+    }
+
+    const role = await getUserRoleForVm(userId, containerId);
+    if (role === 'Viewer') {
+      logger.error(`Unauthorized terminal access attempt (Viewer role) by user ${userId}`);
+      socket.emit('output', { terminalId, data: 'Error: Viewers are not allowed to access the terminal.\r\n' });
       return;
     }
 

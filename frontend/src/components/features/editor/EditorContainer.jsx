@@ -18,7 +18,7 @@ const getLanguageFromFile = (filename) => {
   return map[extension] || 'plaintext';
 };
 
-export default function EditorContainer({ socket, activePath, setActivePath, tabs, setTabs, saveStatuses, setSaveStatuses }) {
+export default function EditorContainer({ socket, activePath, setActivePath, tabs, setTabs, saveStatuses, setSaveStatuses, role }) {
 
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -114,19 +114,11 @@ export default function EditorContainer({ socket, activePath, setActivePath, tab
     };
   }, [socket, activePath, user]);
 
-  // Create/switch Monaco models per tab
-  useEffect(() => {
-    if (!activePath || !monacoRef.current || !editorRef.current) return;
-    const monaco = monacoRef.current;
-    const editor = editorRef.current;
-
-    // Build a consistent file URI
-    const uri = monaco.Uri.file(activePath);
-
-    // Try to reuse existing model
+  const loadTabModel = (monaco, editor, path, tabsList) => {
+    if (!path || !monaco || !editor) return;
+    const uri = monaco.Uri.file(path);
     let model = monaco.editor.getModel(uri);
-
-    const currentTab = tabs.find(t => t.path === activePath);
+    const currentTab = tabsList.find(t => t.path === path);
     if (!currentTab) return;
 
     if (model) {
@@ -136,13 +128,16 @@ export default function EditorContainer({ socket, activePath, setActivePath, tab
     } else {
       model = monaco.editor.createModel(
         currentTab.content,
-        getLanguageFromFile(activePath),
+        getLanguageFromFile(path),
         uri
       );
     }
-
-
     editor.setModel(model);
+  };
+
+  // Create/switch Monaco models per tab
+  useEffect(() => {
+    loadTabModel(monacoRef.current, editorRef.current, activePath, tabs);
   }, [activePath, tabs]);
 
   const handleEditorDidMount = (editor, monaco) => {
@@ -151,6 +146,13 @@ export default function EditorContainer({ socket, activePath, setActivePath, tab
 
     // Use our extendable configuration utility
     configureMonaco(monaco);
+
+    // Load active file content if already available on mount
+    if (activePath) {
+      loadTabModel(monaco, editor, activePath, tabs);
+    }
+
+    if (role === 'Viewer') return;
 
     editor.onDidChangeModelContent(async e => {
       if (e.isFlush) return;
@@ -210,7 +212,8 @@ export default function EditorContainer({ socket, activePath, setActivePath, tab
     <div className="flex flex-col h-full w-full">
       <div className="flex bg-dark-2 overflow-x-auto no-scrollbar border-b border-white/5">
         {tabs.map(tab => {
-          const fileName = tab.path?.split('/').pop();
+          if (!tab || !tab.path) return null;
+          const fileName = tab.path.split('/').pop() || '';
           const isActive = tab.path === activePath;
           const status = saveStatuses[tab.path] || 'saved';
           
@@ -223,11 +226,15 @@ export default function EditorContainer({ socket, activePath, setActivePath, tab
               {/* Active indicator bar */}
               {isActive && <div className="absolute top-0 left-0 right-0 h-[2px] bg-blue-500" />}
               
-              <img 
-                src={`/icons/${getIconForFile(fileName)}`} 
-                className="w-4 h-4 mr-2" 
-                alt="file-icon"
-              />
+              {fileName ? (
+                <img 
+                  src={`/icons/${getIconForFile(fileName)}`} 
+                  className="w-4 h-4 mr-2" 
+                  alt="file-icon"
+                />
+              ) : (
+                <span className="w-4 h-4 mr-2" />
+              )}
               
               <span className="truncate text-[12px] font-medium flex-1">
                 {fileName}
@@ -255,7 +262,7 @@ export default function EditorContainer({ socket, activePath, setActivePath, tab
             defaultLanguage={getLanguageFromFile(activePath)}
             onMount={handleEditorDidMount}
             theme="vs-dark"
-            options={{ automaticLayout: true, minimap: { enabled: true } }}
+            options={{ automaticLayout: true, minimap: { enabled: true }, readOnly: role === 'Viewer' }}
           />
         ) : (
           <div className="p-4 text-gray-500 italic">No file open</div>

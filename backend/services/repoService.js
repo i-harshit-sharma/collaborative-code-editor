@@ -66,3 +66,29 @@ export const getSharedUserIdsByVmId = async (vmId) => {
     throw error;
   }
 };
+
+export const getUserRoleForVm = async (userId, vmId) => {
+  try {
+    const ownerDoc = await User.findOne({ "repos.vmId": vmId });
+    if (!ownerDoc) return null;
+    const repo = ownerDoc.repos.find(r => r.vmId === vmId);
+    if (!repo) return null;
+
+    // Check if the user is in sharedUsers
+    const sharedUser = repo.sharedUsers.find(u => u.userId === userId);
+    if (sharedUser) {
+      return sharedUser.role; // 'Owner', 'Editor', or 'Viewer'
+    }
+
+    // If not explicitly shared, check if public / Anyone with the Link
+    if (repo.access === "Anyone with the Link") {
+      return repo.action || 'Viewer';
+    }
+
+    return null; // No access
+  } catch (error) {
+    console.error("Error in getUserRoleForVm:", error);
+    return null;
+  }
+};
+

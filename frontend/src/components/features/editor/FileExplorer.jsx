@@ -5,7 +5,7 @@ import { useParams } from "react-router-dom";
 import { Pen, Trash, FilePlus, FolderPlus } from "lucide-react";
 
 // FileNode displays each entry and notifies when a file is clicked
-const FileNode = ({ node, style, dragHandle, onOpenFile, onDelete, onRename, onSelect }) => {
+const FileNode = ({ node, style, dragHandle, onOpenFile, onDelete, onRename, onSelect, role }) => {
   const isFolder = Array.isArray(node.data.children);
 
   const handleClick = (e) => {
@@ -39,24 +39,26 @@ const FileNode = ({ node, style, dragHandle, onOpenFile, onDelete, onRename, onS
           : <img src={`/icons/${getIconForFile(node.data.name)}`} height={16} width={16} alt="file" />}
         <span className="text-sm truncate">{node.data.name}</span>
       </div>
-      <div className="flex gap-2 items-center" onClick={(e) => e.stopPropagation()}>
-        <Trash
-          size={14}
-          className="group-hover:opacity-100 opacity-0 text-gray-400 hover:text-red-400 transition-all cursor-pointer"
-          onClick={() => onDelete(node.data.id)}
-        />
-        <Pen
-          size={14}
-          className="group-hover:opacity-100 opacity-0 text-gray-400 hover:text-blue-400 transition-all cursor-pointer"
-          onClick={() => onRename(node.data.id)}
-        />
-      </div>
+      {role !== 'Viewer' && (
+        <div className="flex gap-2 items-center" onClick={(e) => e.stopPropagation()}>
+          <Trash
+            size={14}
+            className="group-hover:opacity-100 opacity-0 text-gray-400 hover:text-red-400 transition-all cursor-pointer"
+            onClick={() => onDelete(node.data.id)}
+          />
+          <Pen
+            size={14}
+            className="group-hover:opacity-100 opacity-0 text-gray-400 hover:text-blue-400 transition-all cursor-pointer"
+            onClick={() => onRename(node.data.id)}
+          />
+        </div>
+      )}
     </div>
   );
 };
 
 // Main explorer component
-export default function FileExplorer({ data: initialData, width, socket, activePath }) {
+export default function FileExplorer({ data: initialData, width, socket, activePath, role }) {
   const [data, setData] = useState(initialData);
   const treeRef = useRef(null);
   const [isCreating, setIsCreating] = useState(null); // 'file', 'folder', or null
@@ -122,6 +124,7 @@ export default function FileExplorer({ data: initialData, width, socket, activeP
   };
 
   const handleMove = ({ dragIds, parentId, index }) => {
+    if (role === 'Viewer') return;
     const reorderTree = (treeData, dragIds, parentId, index) => {
       const deep = JSON.parse(JSON.stringify(treeData));
       const findNodeById = (nodes, id) => {
@@ -238,20 +241,22 @@ export default function FileExplorer({ data: initialData, width, socket, activeP
     <div ref={containerRef} style={{ display: "flex", height: "100%" }} className="flex-col bg-dark-3 w-full">
       <div className="flex bg-dark-2 py-1.5 border-b border-gray-800 text-gray-400 px-3 items-center justify-between group/header">
         <span className="text-[11px] font-bold uppercase tracking-wider">Explorer</span>
-        <div className="flex gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity">
-          <FilePlus 
-            size={16} 
-            className="hover:text-white cursor-pointer p-0.5 rounded hover:bg-white/10" 
-            onClick={() => startCreation('file')}
-            title="New File..."
-          />
-          <FolderPlus 
-            size={16} 
-            className="hover:text-white cursor-pointer p-0.5 rounded hover:bg-white/10" 
-            onClick={() => startCreation('folder')}
-            title="New Folder..."
-          />
-        </div>
+        {role !== 'Viewer' && (
+          <div className="flex gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity">
+            <FilePlus 
+              size={16} 
+              className="hover:text-white cursor-pointer p-0.5 rounded hover:bg-white/10" 
+              onClick={() => startCreation('file')}
+              title="New File..."
+            />
+            <FolderPlus 
+              size={16} 
+              className="hover:text-white cursor-pointer p-0.5 rounded hover:bg-white/10" 
+              onClick={() => startCreation('folder')}
+              title="New Folder..."
+            />
+          </div>
+        )}
       </div>
       
       {isCreating && (
@@ -289,6 +294,7 @@ export default function FileExplorer({ data: initialData, width, socket, activeP
               onDelete={handleDelete}
               onRename={handleRename}
               onSelect={handleSelect}
+              role={role}
             />
           )}
         </Tree>

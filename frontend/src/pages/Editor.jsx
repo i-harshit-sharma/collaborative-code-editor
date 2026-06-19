@@ -22,7 +22,7 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
     const isResizingRef = useRef(null);
     const mainRef = useRef(null);
     const [filedata, setFiledata] = useState('');
-    const socketRef = useRef(null);
+    const [socket, setSocket] = useState(null);
     const [sidebarWidth, setSidebarWidth] = useState(240);
     const [topHeight, setTopHeight] = useState(window.innerHeight - 300);
     const [activePath, setActivePath] = useState(null);
@@ -55,27 +55,30 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
     useEffect(() => {
         const socketUrl = import.meta.env.VITE_API_BASE_URL;
         let refreshInterval;
+        let socketInstance;
 
         const initSocket = async () => {
             const token = await getToken();
             
-            socketRef.current = io(socketUrl, {
+            socketInstance = io(socketUrl, {
                 auth: { token },
                 transports: ['websocket']
             });
             
-            socketRef.current.on('connect', () => {
+            setSocket(socketInstance);
+
+            socketInstance.on('connect', () => {
                 console.log('🔌 Connected to socket server');
-                socketRef.current.emit('join-room', { roomId });
-                socketRef.current.emit('getFiles', { path: '/app', id: roomId });
+                socketInstance.emit('join-room', { roomId });
+                socketInstance.emit('getFiles', { path: '/app', id: roomId });
             });
 
-            socketRef.current.on('error', (err) => {
+            socketInstance.on('error', (err) => {
                 console.error('Socket error:', err);
                 if (err === 'Session expired') {
                     // Force re-auth
                     getToken({ skipCache: true }).then(newToken => {
-                        socketRef.current.emit('authenticate', { token: newToken });
+                        socketInstance.emit('authenticate', { token: newToken });
                     });
                 }
             });
@@ -84,7 +87,7 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
             refreshInterval = setInterval(async () => {
                 try {
                     const newToken = await getToken({ skipCache: true });
-                    socketRef.current.emit('authenticate', { token: newToken });
+                    socketInstance.emit('authenticate', { token: newToken });
                 } catch (err) {
                     console.error('Failed to refresh socket token:', err);
                 }
@@ -95,19 +98,25 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
 
         return () => {
             if (refreshInterval) clearInterval(refreshInterval);
-            socketRef.current?.disconnect();
+            socketInstance?.disconnect();
+            setSocket(null);
         };
     }, [roomId, getToken]);
 
     useEffect(() => {
-        if (!socketRef.current) return;
-        const socket = socketRef.current;
+        if (!socket) return;
+
+        let loadingTimeout = setTimeout(() => {
+            setExplorerError("Connection timeout. Please refresh or check your internet.");
+            setIsExplorerLoading(false);
+        }, 10000); // 10s timeout
 
         const handleFilesReady = () => {
             socket.emit('getFiles', { path: '/app', id: roomId });
         };
 
         const handleFiles = (data) => {
+            clearTimeout(loadingTimeout);
             setIsExplorerLoading(false);
             if (data.error) {
                 console.error('File fetch error:', data.error);
@@ -120,15 +129,14 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
             }
         };
 
-        // Timeout for loading
-        const loadingTimeout = setTimeout(() => {
-            if (isExplorerLoading && !filedata) {
-                setExplorerError("Connection timeout. Please refresh or check your internet.");
-                setIsExplorerLoading(false);
+        const handleFileContent = (data) => {
+            if (data.error) {
+                console.error('Failed to open file:', data.error);
+                return;
             }
-        }, 10000); // 10s timeout
-
-        const handleFileContent = ({ path, content }) => {
+            const { path, content } = data;
+            if (!path) return;
+            
             setTabs(prev => {
                 const found = prev.find(t => t.path === path);
                 if (found) {
@@ -150,7 +158,8 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
             socket.off('files', handleFiles);
             socket.off('fileContent', handleFileContent);
         };
-    }, [roomId]);
+    }, [roomId, socket]);
+
     const handleMouseDown = (resizer) => (e) => {
         isResizingRef.current = resizer;
         document.addEventListener('mousemove', handleMouseMove);
@@ -186,7 +195,7 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
                                         onClick={() => {
                                             setExplorerError(null);
                                             setIsExplorerLoading(true);
-                                            socketRef.current?.emit('getFiles', { path: '/app', id: roomId });
+                                            socket?.emit('getFiles', { path: '/app', id: roomId });
                                         }}
                                         className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded transition-colors"
                                     >
@@ -194,7 +203,7 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
                                     </button>
                                 </div>
                             ) : filedata ? (
-                                <FileExplorer data={filedata} socket={socketRef.current} activePath={activePath} width={sidebarWidth} />
+                                <FileExplorer data={filedata} socket={socket} activePath={activePath} width={sidebarWidth} role={vmMetadata?.role} />
                             ) : (
                                 <div className="flex flex-col gap-3 p-4">
                                     <div className="flex items-center justify-between mb-4">
@@ -213,11 +222,11 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
                                 </div>
                             )
                         )}
-                        {sidebarValue === 'search' && <SearchL socket={socketRef.current} />}
+                        {sidebarValue === 'search' && <SearchL socket={socket} />}
                         {sidebarValue === 'share' && <Share />}
                         {sidebarValue === 'chat' && (
                             <React.Suspense fallback={<div className="p-4 text-gray-400">Loading Chat...</div>}>
-                                <Chat socket={socketRef.current} roomId={roomId} />
+                                <Chat socket={socket} roomId={roomId} />
                             </React.Suspense>
                         )}
                         {sidebarValue === 'draw' && (
@@ -243,31 +252,36 @@ const ResizableLayout = ({ showSidebar, sidebarValue }) => {
 
             {/* Main Area */}
             <div className="flex-1 flex flex-col min-w-0">
-                <div style={{ height: topHeight }} className="flex-1 relative">
+                <div style={{ height: vmMetadata?.role === 'Viewer' ? '100%' : topHeight }} className="flex-1 relative">
                     {sidebarValue === 'draw' ? (
                         <React.Suspense fallback={<div className="flex-1 flex items-center justify-center bg-dark-4 text-gray-400">Loading Whiteboard...</div>}>
                             <Whiteboard />
                         </React.Suspense>
                     ) : (
                         <EditorContainer 
-                            socket={socketRef.current} 
+                            socket={socket} 
                             activePath={activePath} 
                             setActivePath={setActivePath} 
                             tabs={tabs}
                             setTabs={setTabs}
                             saveStatuses={saveStatuses}
                             setSaveStatuses={setSaveStatuses}
+                            role={vmMetadata?.role}
                         />
                     )}
                 </div>
 
                 {/* Terminal Resizer */}
-                <div onMouseDown={handleMouseDown('terminal')} className="h-1 bg-gray-800 hover:bg-blue-600 cursor-row-resize transition-colors" />
+                {vmMetadata?.role !== 'Viewer' && (
+                    <div onMouseDown={handleMouseDown('terminal')} className="h-1 bg-gray-800 hover:bg-blue-600 cursor-row-resize transition-colors" />
+                )}
 
                 {/* Terminal Pane */}
-                <div className="flex-none h-[300px] bg-dark-4">
-                    <TerminalPane containerId={roomId} socket={socketRef.current} />
-                </div>
+                {vmMetadata?.role !== 'Viewer' && (
+                    <div className="flex-none h-[300px] bg-dark-4">
+                        <TerminalPane containerId={roomId} socket={socket} />
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -28,6 +28,7 @@ export default function TerminalPane({ containerId, socket }) {
       // Clean up all terminals on unmount
       Object.values(terminalsRef.current).forEach(entry => {
         if (entry.handleResize) window.removeEventListener('resize', entry.handleResize);
+        if (entry.resizeObserver) entry.resizeObserver.disconnect();
         entry.term.dispose();
       });
     };
@@ -50,6 +51,7 @@ export default function TerminalPane({ containerId, socket }) {
     const term = new Terminal({ 
       cursorBlink: true, 
       fontSize: 14,
+      fontFamily: 'Consolas, "Courier New", Courier, monospace',
       theme: {
         background: '#1e1e1e',
         foreground: '#ffffff',
@@ -67,8 +69,11 @@ export default function TerminalPane({ containerId, socket }) {
       const entry = terminalsRef.current[termId];
       if (!entry || !entry.containerRef.current) return;
       
+      if (document.fonts) {
+        await document.fonts.ready;
+      }
+      
       entry.term.open(entry.containerRef.current);
-      entry.fit.fit();
       entry.term.focus();
 
       socket.emit('sendToken', { containerId, terminalId: termId });
@@ -81,6 +86,15 @@ export default function TerminalPane({ containerId, socket }) {
         socket.emit('resize', { terminalId: termId, cols, rows });
       });
 
+      // Use ResizeObserver to reliably call fit() when container size is valid
+      const resizeObserver = new ResizeObserver(() => {
+        if (entry.containerRef.current && entry.containerRef.current.clientWidth > 0 && entry.containerRef.current.clientHeight > 0) {
+          entry.fit.fit();
+        }
+      });
+      resizeObserver.observe(entry.containerRef.current);
+      entry.resizeObserver = resizeObserver;
+
       const handleResize = () => entry.fit.fit();
       window.addEventListener('resize', handleResize);
       entry.handleResize = handleResize;
@@ -92,6 +106,7 @@ export default function TerminalPane({ containerId, socket }) {
     const entry = terminalsRef.current[id];
     if (entry) {
       if (entry.handleResize) window.removeEventListener('resize', entry.handleResize);
+      if (entry.resizeObserver) entry.resizeObserver.disconnect();
       entry.term.dispose();
       delete terminalsRef.current[id];
       
@@ -137,7 +152,7 @@ export default function TerminalPane({ containerId, socket }) {
                 className="px-2 py-1 hover:bg-red-500/20 hover:text-red-400 text-gray-500 transition-all border-l border-gray-700"
                 title="Close Terminal"
               >
-                ×
+                x
               </button>
             </div>
           ))}

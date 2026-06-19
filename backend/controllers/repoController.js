@@ -1,6 +1,6 @@
 import User from '../models/User.js';
 import { createContainerFromImages } from '../services/dockerService.js';
-import { getSharedUserIdsByVmId } from '../services/repoService.js';
+import { getSharedUserIdsByVmId, getUserRoleForVm } from '../services/repoService.js';
 import { initializeVM } from '../services/containerInitService.js';
 import { vmTemplates } from '../config/vmTemplates.js';
 import logger from '../utils/logger.js';
@@ -112,18 +112,13 @@ export const editRepo = async (req, res) => {
 
 export const checkRepo = async (req, res) => {
   const { id } = req.params;
-  const user = req.user;
   const authId = req.authId;
 
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-
-  const users = await getSharedUserIdsByVmId(id);
-  if (users.find(uId => uId === authId)) {
+  const role = await getUserRoleForVm(authId, id);
+  if (role) {
     // Ensure VM is initialized when user enters
     initializeVM(id).catch(err => logger.error(`Init trigger error: ${err.message}`));
-    return res.status(200).json({ message: 'User has access' });
+    return res.status(200).json({ message: 'User has access', role });
   }
 
   return res.status(403).json({ message: 'User does not have access' });
@@ -134,6 +129,7 @@ export const checkRepo = async (req, res) => {
  */
 export const getVmMetadata = async (req, res) => {
   const { vmId } = req.params;
+  const authId = req.authId;
 
   try {
     const user = await User.findOne({ "repos.vmId": vmId });
@@ -147,11 +143,13 @@ export const getVmMetadata = async (req, res) => {
     }
 
     const template = vmTemplates[repo.language] || {};
+    const role = await getUserRoleForVm(authId, vmId);
     
     res.json({
       language: repo.language,
       repoName: repo.repoName,
-      defaultPorts: template.ports || [3000, 5000, 8000, 8080]
+      defaultPorts: template.ports || [3000, 5000, 8000, 8080],
+      role: role || 'Viewer'
     });
   } catch (err) {
     logger.error(`Failed to get VM metadata for ${vmId}: ${err.message}`);

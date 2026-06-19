@@ -3,6 +3,7 @@ import path from 'path';
 import { clerkClient } from '../config/clerk.js';
 import { markVMActive } from './vmMonitor.js';
 import logger from '../utils/logger.js';
+import { getUserRoleForVm } from '../services/repoService.js';
 
 export default (io, socket, rooms, userList) => {
   socket.on('getFiles', (data) => {
@@ -37,7 +38,12 @@ export default (io, socket, rooms, userList) => {
     });
   });
 
-  socket.on('deleteFile', (data) => {
+  socket.on('deleteFile', async (data) => {
+    const role = await getUserRoleForVm(socket.data.userId, data.id);
+    if (role === 'Viewer') {
+      return socket.emit('saveError', { error: 'Unauthorized: Viewers cannot delete files.' });
+    }
+
     if (data.id) markVMActive(data.id);
     const cmd = `docker exec ${data.id} rm -rf ${data.path}`;
     logger.info(`🗑️ Deleting file ${data.path} in VM ${data.id}`);
@@ -51,7 +57,12 @@ export default (io, socket, rooms, userList) => {
     });
   });
 
-  socket.on('renameFile', ({ id, path: oldPath, newName }) => {
+  socket.on('renameFile', async ({ id, path: oldPath, newName }) => {
+    const role = await getUserRoleForVm(socket.data.userId, id);
+    if (role === 'Viewer') {
+      return socket.emit('renameError', { error: 'Unauthorized: Viewers cannot rename files.' });
+    }
+
     if (id) markVMActive(id);
     const dir = path.posix.dirname(oldPath);
     const newPath = path.posix.join(dir, newName);
@@ -66,7 +77,12 @@ export default (io, socket, rooms, userList) => {
     });
   });
 
-  socket.on('createFile', ({ id, path: filePath }) => {
+  socket.on('createFile', async ({ id, path: filePath }) => {
+    const role = await getUserRoleForVm(socket.data.userId, id);
+    if (role === 'Viewer') {
+      return socket.emit('createError', { error: 'Unauthorized: Viewers cannot create files.' });
+    }
+
     if (id) markVMActive(id);
     const cmd = `docker exec ${id} touch "${filePath}"`;
     logger.info(`📄 Creating file ${filePath} in VM ${id}`);
@@ -79,7 +95,12 @@ export default (io, socket, rooms, userList) => {
     });
   });
 
-  socket.on('createFolder', ({ id, path: folderPath }) => {
+  socket.on('createFolder', async ({ id, path: folderPath }) => {
+    const role = await getUserRoleForVm(socket.data.userId, id);
+    if (role === 'Viewer') {
+      return socket.emit('createError', { error: 'Unauthorized: Viewers cannot create folders.' });
+    }
+
     if (id) markVMActive(id);
     const cmd = `docker exec ${id} mkdir -p "${folderPath}"`;
     logger.info(`📁 Creating folder ${folderPath} in VM ${id}`);
@@ -92,7 +113,12 @@ export default (io, socket, rooms, userList) => {
     });
   });
 
-  socket.on('save-file', ({ roomId, path: rawPath, code }) => {
+  socket.on('save-file', async ({ roomId, path: rawPath, code }) => {
+    const role = await getUserRoleForVm(socket.data.userId, roomId);
+    if (role === 'Viewer') {
+      return socket.emit('saveError', { error: 'Unauthorized: Viewers cannot save files.' });
+    }
+
     if (roomId) markVMActive(roomId);
     const filePath = rawPath.replace(/\\/g, '/');
     const proc = spawn('docker', ['exec', '-i', roomId, 'tee', filePath]);
@@ -114,6 +140,9 @@ export default (io, socket, rooms, userList) => {
   });
 
   socket.on('code-change', async ({ roomId, path, code }) => {
+    const role = await getUserRoleForVm(socket.data.userId, roomId);
+    if (role === 'Viewer') return;
+
     if (roomId) markVMActive(roomId);
     
     // Use cached userId from join-room
@@ -132,6 +161,7 @@ export default (io, socket, rooms, userList) => {
     
     socket.to(roomId).emit('cursor-change', { path, position, username });
   });
+
 };
 
 function buildTreeFromFind(lines, basePath) {

@@ -142,7 +142,11 @@ export default function Working() {
     const termId = uuidv4();
     const containerRef = React.createRef();
     const fit = new FitAddon();
-    const term = new Terminal({ cursorBlink: true, fontSize: 14 });
+    const term = new Terminal({ 
+      cursorBlink: true, 
+      fontSize: 14,
+      fontFamily: 'Consolas, "Courier New", Courier, monospace'
+    });
     term.loadAddon(fit);
 
     terminalsRef.current[termId] = { term, fit, containerRef };
@@ -153,8 +157,12 @@ export default function Working() {
     setTimeout(async () => {
       const entry = terminalsRef.current[termId];
       const { term, fit, containerRef } = entry;
+      
+      if (document.fonts) {
+        await document.fonts.ready;
+      }
+
       term.open(containerRef.current);
-      fit.fit();
 
       socketRef.current.emit('sendToken', { containerId, terminalId: termId });
 
@@ -165,12 +173,24 @@ export default function Working() {
         }
       });
 
+      // Use ResizeObserver to reliably call fit() when container size is valid
+      const resizeObserver = new ResizeObserver(() => {
+        if (containerRef.current && containerRef.current.clientWidth > 0 && containerRef.current.clientHeight > 0) {
+          fit.fit();
+        }
+      });
+      resizeObserver.observe(containerRef.current);
+      entry.resizeObserver = resizeObserver;
+
       // Resize handler for this terminal
       const onResize = () => fit.fit();
       window.addEventListener('resize', onResize);
 
-      // Clean up when terminal is closed
-      entry.dispose = () => window.removeEventListener('resize', onResize);
+      // Clean up when terminal is closed or unmounted
+      entry.dispose = () => {
+        resizeObserver.disconnect();
+        window.removeEventListener('resize', onResize);
+      };
     }, 0);
   };
 
